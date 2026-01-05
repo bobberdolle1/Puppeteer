@@ -1,5 +1,6 @@
 use bincode::{deserialize, serialize};
 use chrono::{NaiveDateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqliteRow, FromRow, Row, SqlitePool};
 use teloxide::types::Message;
 
@@ -45,6 +46,28 @@ pub struct Persona {
     pub is_active: bool,
 }
 
+/// Persona export format for JSON serialization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonaExport {
+    pub name: String,
+    pub prompt: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub version: String,
+}
+
+impl From<Persona> for PersonaExport {
+    fn from(p: Persona) -> Self {
+        Self {
+            name: p.name,
+            prompt: p.prompt,
+            description: None,
+            version: "1.0".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, FromRow, Clone)]
 pub struct ChatSettings {
     pub chat_id: i64,
@@ -71,6 +94,19 @@ pub async fn get_all_personas(pool: &SqlitePool) -> Result<Vec<Persona>, sqlx::E
 
 pub async fn get_active_persona(pool: &SqlitePool) -> Result<Option<Persona>, sqlx::Error> {
     sqlx::query("SELECT id, name, prompt, is_active FROM personas WHERE is_active = 1 LIMIT 1")
+        .map(|row: SqliteRow| Persona {
+            id: row.get("id"),
+            name: row.get("name"),
+            prompt: row.get("prompt"),
+            is_active: row.get("is_active"),
+        })
+        .fetch_optional(pool)
+        .await
+}
+
+pub async fn get_persona_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Persona>, sqlx::Error> {
+    sqlx::query("SELECT id, name, prompt, is_active FROM personas WHERE id = ?")
+        .bind(id)
         .map(|row: SqliteRow| Persona {
             id: row.get("id"),
             name: row.get("name"),
@@ -678,3 +714,75 @@ pub async fn count_unsummarized_messages(
 
     Ok(count)
 }
+
+
+// --- Persona Export/Import Functions ---
+
+/// Export a single persona to JSON format
+pub async fn export_persona(pool: &SqlitePool, id: i64) -> Result<Option<String>, sqlx::Error> {
+    match get_persona_by_id(pool, id).await? {
+        Some(persona) => {
+            let export: PersonaExport = persona.into();
+            Ok(serde_json::to_string_pretty(&export).ok())
+        }
+        None => Ok(None),
+    }
+}
+
+/// Export all personas to JSON format
+pub async fn export_all_personas(pool: &SqlitePool) -> Result<String, sqlx::Error> {
+    let personas = get_all_personas(pool).await?;
+    let exports: Vec<PersonaExport> = personas.into_iter().map(|p| p.into()).collect();
+    Ok(serde_json::to_string_pretty(&exports).unwrap_or_else(|_| "[]".to_string()))
+}
+
+/// Import a persona from JSON format
+pub async fn import_persona(pool: &SqlitePool, json: &str) -> Result<i64, ImportError> {
+    let export: PersonaExport = serde_json::from_str(json)
+        .map_err(|e: serde_json::Error| ImportError::ParseError(e.to_string()))?;
+    
+    if export.name.is_empty() || export.prompt.is_empty() {
+        return Err(ImportError::ValidationError("Name and prompt cannot be empty".to_string()));
+    }
+    
+    create_persona(pool, &export.name, &export.prompt)
+        .await
+        .map_err(|e| ImportError::DatabaseError(e.to_string()))
+}
+
+/// Import multiple personas from JSON array
+pub async fn import_personas(pool: &SqlitePool, json: &str) -> Result<Vec<i64>, ImportError> {
+    let exports: Vec<PersonaExport> = serde_json::from_str(json)
+        .map_err(|e: serde_json::Error| ImportError::ParseError(e.to_string()))?;
+    
+    let mut ids = Vec::new();
+    for export in exports {
+        if export.name.is_empty() || export.prompt.is_empty() {
+            continue;
+        }
+        match create_persona(pool, &export.name, &export.prompt).await {
+            Ok(id) => ids.push(id),
+            Err(e) => log::warn!("Failed to import persona '{}': {}", export.name, e),
+        }
+    }
+    Ok(ids)
+}
+
+#[derive(Debug)]
+pub enum ImportError {
+    ParseError(String),
+    ValidationError(String),
+    DatabaseError(String),
+}
+
+impl std::fmt::Display for ImportError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ImportError::ParseError(e) => write!(f, "Parse error: {}", e),
+            ImportError::ValidationError(e) => write!(f, "Validation error: {}", e),
+            ImportError::DatabaseError(e) => write!(f, "Database error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for ImportError {}

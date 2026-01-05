@@ -2,6 +2,7 @@ use crate::db;
 use crate::state::AppState;
 use teloxide::prelude::*;
 use teloxide::types::ParseMode;
+use teloxide::net::Download;
 
 pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> ResponseResult<()> {
     let text = msg.text().unwrap_or_default();
@@ -44,6 +45,9 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
         "/broadcast" => handle_broadcast(bot, msg, &state).await,
         "/queue_stats" | "/stats" => handle_queue_stats(bot, msg, &state).await,
         "/models" => handle_list_models(bot, msg, &state).await,
+        "/export_persona" => handle_export_persona(bot, msg, &state).await,
+        "/export_all_personas" => handle_export_all_personas(bot, msg, &state).await,
+        "/import_persona" => handle_import_persona(bot, msg, &state).await,
         _ => {
             bot.send_message(chat_id, "❌ Неизвестная команда. /help").await?;
             Ok(())
@@ -487,6 +491,95 @@ async fn handle_list_models(bot: Bot, msg: Message, state: &AppState) -> Respons
     Ok(())
 }
 
+async fn handle_export_persona(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    let chat_id = msg.chat.id;
+    let text = msg.text().unwrap_or_default();
+    let parts: Vec<&str> = text.split_whitespace().collect();
+
+    if parts.len() != 2 {
+        bot.send_message(chat_id, "❌ Формат: /export_persona ID").await?;
+        return Ok(());
+    }
+
+    let id = match parts[1].parse::<i64>() {
+        Ok(id) => id,
+        Err(_) => { bot.send_message(chat_id, "❌ ID должен быть числом.").await?; return Ok(()); }
+    };
+
+    match db::export_persona(&state.db_pool, id).await {
+        Ok(Some(json)) => {
+            // Send as document
+            let filename = format!("persona_{}.json", id);
+            let doc = teloxide::types::InputFile::memory(json.into_bytes()).file_name(filename);
+            bot.send_document(chat_id, doc)
+                .caption("📤 Экспорт персоны")
+                .await?;
+        }
+        Ok(None) => { bot.send_message(chat_id, "❌ Персона не найдена.").await?; }
+        Err(e) => { log::error!("Export error: {}", e); bot.send_message(chat_id, "❌ Ошибка экспорта.").await?; }
+    }
+    Ok(())
+}
+
+async fn handle_export_all_personas(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    let chat_id = msg.chat.id;
+
+    match db::export_all_personas(&state.db_pool).await {
+        Ok(json) => {
+            let doc = teloxide::types::InputFile::memory(json.into_bytes()).file_name("personas_export.json");
+            bot.send_document(chat_id, doc)
+                .caption("📤 Экспорт всех персон")
+                .await?;
+        }
+        Err(e) => { log::error!("Export error: {}", e); bot.send_message(chat_id, "❌ Ошибка экспорта.").await?; }
+    }
+    Ok(())
+}
+
+async fn handle_import_persona(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    let chat_id = msg.chat.id;
+    
+    // Check if message has a document attached
+    if let Some(doc) = msg.document() {
+        let file = bot.get_file(doc.file.id.clone()).await?;
+        let mut buffer = Vec::new();
+        bot.download_file(&file.path, &mut buffer).await?;
+        
+        let json = String::from_utf8_lossy(&buffer);
+        
+        // Try to import as array first, then as single
+        match db::import_personas(&state.db_pool, &json).await {
+            Ok(ids) if !ids.is_empty() => {
+                bot.send_message(chat_id, format!("✅ Импортировано {} персон: {:?}", ids.len(), ids)).await?;
+            }
+            Ok(_) => {
+                // Try single import
+                match db::import_persona(&state.db_pool, &json).await {
+                    Ok(id) => { bot.send_message(chat_id, format!("✅ Персона импортирована с ID: {}", id)).await?; }
+                    Err(e) => { bot.send_message(chat_id, format!("❌ Ошибка импорта: {}", e)).await?; }
+                }
+            }
+            Err(e) => { bot.send_message(chat_id, format!("❌ Ошибка импорта: {}", e)).await?; }
+        }
+    } else {
+        // Check for JSON in message text
+        let text = msg.text().unwrap_or_default();
+        let parts: Vec<&str> = text.splitn(2, ' ').collect();
+        
+        if parts.len() < 2 || parts[1].trim().is_empty() {
+            bot.send_message(chat_id, "📥 <b>Импорт персоны</b>\n\nОтправьте JSON-файл или:\n/import_persona {\"name\":\"...\",\"prompt\":\"...\"}").parse_mode(ParseMode::Html).await?;
+            return Ok(());
+        }
+
+        let json = parts[1].trim();
+        match db::import_persona(&state.db_pool, json).await {
+            Ok(id) => { bot.send_message(chat_id, format!("✅ Персона импортирована с ID: {}", id)).await?; }
+            Err(e) => { bot.send_message(chat_id, format!("❌ Ошибка: {}", e)).await?; }
+        }
+    }
+    Ok(())
+}
+
 pub async fn send_main_menu(bot: Bot, chat_id: ChatId) -> ResponseResult<()> {
     use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
     let kb = InlineKeyboardMarkup::new(vec![
@@ -523,6 +616,9 @@ pub async fn send_help_message(bot: Bot, chat_id: ChatId) -> ResponseResult<()> 
 /activate_persona ID
 /update_persona ID|название|описание
 /delete_persona ID
+/export_persona ID
+/export_all_personas
+/import_persona (+ JSON файл)
 
 <b>⚙️ Модель:</b>
 /set_model, /set_temperature, /set_max_tokens
@@ -544,7 +640,10 @@ pub async fn send_help_message(bot: Bot, chat_id: ChatId) -> ResponseResult<()> 
 /status, /stats, /broadcast
 
 <b>🎛️ Меню:</b>
-/menu, /settings"#;
+/menu, /settings
+
+<b>💡 Треды:</b>
+Бот поддерживает треды в супергруппах"#;
 
     bot.send_message(chat_id, text).parse_mode(ParseMode::Html).await?;
     Ok(())
