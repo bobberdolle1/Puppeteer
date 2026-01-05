@@ -8,6 +8,8 @@ services:
     container_name: persona_forge_bot
     env_file:
       - .env
+    ports:
+      - "${WEBAPP_PORT:-8080}:8080"
     # The bot will connect to Ollama running on the host machine.
     # On Linux, `host.docker.internal` might not resolve by default,
     # so explicitly map it to the host IP.

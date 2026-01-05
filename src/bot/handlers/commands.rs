@@ -37,7 +37,10 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
         "/reply_to_all" => handle_reply_to_all(bot, msg, &state).await,
         "/reply_to_mention" => handle_reply_to_mention(bot, msg, &state).await,
         "/set_cooldown" => handle_set_cooldown(bot, msg, &state).await,
-        "/menu" => send_main_menu(bot, chat_id).await,
+        "/menu" => {
+            crate::bot::handlers::callbacks::send_main_menu_new(&bot, chat_id).await?;
+            Ok(())
+        }
         "/settings" => send_settings_menu(bot, chat_id).await,
         "/help" => send_help_message(bot, chat_id).await,
         "/ghost" => handle_ghost_mode(bot, msg, &state).await,

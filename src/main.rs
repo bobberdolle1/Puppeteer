@@ -1,10 +1,13 @@
 use persona_forge::config::Config;
 use persona_forge::state::AppState;
+use persona_forge::bot::handlers::callbacks::handle_callback_query;
+use persona_forge::webapp::start_webapp_server;
 use sqlx::sqlite::SqlitePoolOptions;
 use teloxide::prelude::*;
 
 #[tokio::main]
 async fn main() {
+    dotenv::dotenv().ok();
     pretty_env_logger::init();
     log::info!("Starting PersonaForge bot...");
 
@@ -37,10 +40,19 @@ async fn main() {
     }
     log::info!("Database migrations ran successfully.");
 
+    let webapp_port = config.webapp_port;
     let bot = Bot::new(config.teloxide_token.clone());
     let app_state = AppState::new(config, db_pool);
 
-    let handler = Update::filter_message().endpoint(persona_forge::bot::handlers::messages::handle_message);
+    // Start webapp server in background
+    let webapp_state = app_state.clone();
+    tokio::spawn(async move {
+        start_webapp_server(webapp_state, webapp_port).await;
+    });
+
+    let handler = dptree::entry()
+        .branch(Update::filter_message().endpoint(persona_forge::bot::handlers::messages::handle_message))
+        .branch(Update::filter_callback_query().endpoint(handle_callback_query));
 
     Dispatcher::builder(bot, handler)
         .dependencies(dptree::deps![app_state])

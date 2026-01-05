@@ -180,6 +180,20 @@ pub async fn delete_persona(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Erro
 
 // --- Public Functions: Chat Settings ---
 
+pub async fn get_all_chat_settings(pool: &SqlitePool) -> Result<Vec<ChatSettings>, sqlx::Error> {
+    sqlx::query("SELECT chat_id, auto_reply_enabled, reply_mode, cooldown_seconds, context_depth, rag_enabled FROM chat_settings WHERE chat_id != 0 ORDER BY chat_id")
+        .map(|row: SqliteRow| ChatSettings {
+            chat_id: row.get("chat_id"),
+            auto_reply_enabled: row.get("auto_reply_enabled"),
+            reply_mode: row.get("reply_mode"),
+            cooldown_seconds: row.get("cooldown_seconds"),
+            context_depth: row.get("context_depth"),
+            rag_enabled: row.get("rag_enabled"),
+        })
+        .fetch_all(pool)
+        .await
+}
+
 pub async fn get_or_create_chat_settings(
     pool: &SqlitePool,
     chat_id: i64,
@@ -786,3 +800,134 @@ impl std::fmt::Display for ImportError {
 }
 
 impl std::error::Error for ImportError {}
+
+// --- Runtime Config Functions ---
+
+/// Get a runtime config value
+pub async fn get_config(pool: &SqlitePool, key: &str) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query("SELECT value FROM runtime_config WHERE key = ?")
+        .bind(key)
+        .map(|row: SqliteRow| row.get("value"))
+        .fetch_optional(pool)
+        .await
+}
+
+/// Set a runtime config value
+pub async fn set_config(pool: &SqlitePool, key: &str, value: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO runtime_config (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP"
+    )
+    .bind(key)
+    .bind(value)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Get all runtime config as HashMap
+pub async fn get_all_config(pool: &SqlitePool) -> Result<std::collections::HashMap<String, String>, sqlx::Error> {
+    let rows: Vec<(String, String)> = sqlx::query("SELECT key, value FROM runtime_config")
+        .map(|row: SqliteRow| (row.get("key"), row.get("value")))
+        .fetch_all(pool)
+        .await?;
+    Ok(rows.into_iter().collect())
+}
+
+/// Get config value as f64
+pub async fn get_config_f64(pool: &SqlitePool, key: &str, default: f64) -> f64 {
+    get_config(pool, key)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
+}
+
+/// Get config value as u32
+pub async fn get_config_u32(pool: &SqlitePool, key: &str, default: u32) -> u32 {
+    get_config(pool, key)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
+}
+
+/// Get config value as bool
+pub async fn get_config_bool(pool: &SqlitePool, key: &str, default: bool) -> bool {
+    get_config(pool, key)
+        .await
+        .ok()
+        .flatten()
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(default)
+}
+
+
+// --- Clear Functions ---
+
+/// Clear all messages for a chat
+pub async fn clear_chat_history(pool: &SqlitePool, chat_id: i64) -> Result<(), sqlx::Error> {
+    // First delete memory chunks associated with messages
+    sqlx::query(
+        "DELETE FROM memory_chunks WHERE message_id IN (SELECT id FROM messages WHERE chat_id = ?)"
+    )
+    .bind(chat_id)
+    .execute(pool)
+    .await?;
+    
+    // Delete summaries
+    sqlx::query("DELETE FROM chat_summaries WHERE chat_id = ?")
+        .bind(chat_id)
+        .execute(pool)
+        .await?;
+    
+    // Delete messages
+    sqlx::query("DELETE FROM messages WHERE chat_id = ?")
+        .bind(chat_id)
+        .execute(pool)
+        .await?;
+    
+    Ok(())
+}
+
+/// Clear only RAG memory (memory_chunks) for a chat
+pub async fn clear_chat_memory(pool: &SqlitePool, chat_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "DELETE FROM memory_chunks WHERE message_id IN (SELECT id FROM messages WHERE chat_id = ?)"
+    )
+    .bind(chat_id)
+    .execute(pool)
+    .await?;
+    
+    // Also clear summaries
+    sqlx::query("DELETE FROM chat_summaries WHERE chat_id = ?")
+        .bind(chat_id)
+        .execute(pool)
+        .await?;
+    
+    Ok(())
+}
+
+/// Get message count for a chat
+pub async fn get_message_count(pool: &SqlitePool, chat_id: i64) -> Result<i64, sqlx::Error> {
+    let count: i64 = sqlx::query("SELECT COUNT(*) as cnt FROM messages WHERE chat_id = ?")
+        .bind(chat_id)
+        .map(|row: SqliteRow| row.get("cnt"))
+        .fetch_one(pool)
+        .await?;
+    Ok(count)
+}
+
+/// Get memory chunk count for a chat
+pub async fn get_memory_count(pool: &SqlitePool, chat_id: i64) -> Result<i64, sqlx::Error> {
+    let count: i64 = sqlx::query(
+        "SELECT COUNT(*) as cnt FROM memory_chunks WHERE message_id IN (SELECT id FROM messages WHERE chat_id = ?)"
+    )
+    .bind(chat_id)
+    .map(|row: SqliteRow| row.get("cnt"))
+    .fetch_one(pool)
+    .await?;
+    Ok(count)
+}

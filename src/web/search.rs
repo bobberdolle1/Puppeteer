@@ -19,6 +19,7 @@ pub struct SearchResult {
 struct DdgResponse {
     #[serde(rename = "Abstract")]
     abstract_text: Option<String>,
+    #[allow(dead_code)]
     #[serde(rename = "AbstractSource")]
     abstract_source: Option<String>,
     #[serde(rename = "AbstractURL")]

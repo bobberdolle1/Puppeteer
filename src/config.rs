@@ -49,6 +49,9 @@ pub struct Config {
     /// Number of messages before auto-summarization
     #[serde(default = "default_summary_threshold")]
     pub summary_threshold: u32,
+    /// WebApp server port
+    #[serde(default = "default_webapp_port")]
+    pub webapp_port: u16,
 }
 
 fn default_ollama_url() -> String {
@@ -117,6 +120,10 @@ fn default_rag_decay_rate() -> f64 {
 
 fn default_summary_threshold() -> u32 {
     50 // Summarize every 50 messages
+}
+
+fn default_webapp_port() -> u16 {
+    8080
 }
 
 impl Config {

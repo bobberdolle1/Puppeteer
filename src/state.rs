@@ -32,6 +32,10 @@ pub enum WizardState {
     DeletingPersonaConfirm { id: i64 },
     /// Setting keyword triggers
     SettingKeywords,
+    /// Importing persona from JSON
+    ImportingPersona,
+    /// Broadcasting message to all chats
+    Broadcasting,
 }
 
 /// Ghost mode state for owner takeover
