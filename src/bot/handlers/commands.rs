@@ -374,24 +374,67 @@ async fn handle_ghost_mode(bot: Bot, msg: Message, state: &AppState) -> Response
         Some("on") => {
             let save = parts.get(2).map(|s| *s) != Some("nosave");
             state.toggle_ghost_mode(chat_id, true, save).await;
-            let msg = if save {
-                "👻 Режим призрака включен!\nСообщения сохраняются как примеры.\n/ghost off для выхода"
+            
+            let help_msg = if save {
+                "👻 <b>Ghost Mode включен!</b>\n\n\
+                Теперь твои сообщения будут отправляться от имени бота.\n\
+                Примеры сохраняются для обучения персоны.\n\n\
+                <b>Команды:</b>\n\
+                • <code>!status</code> — статус\n\
+                • <code>!exit</code> или <code>/ghost off</code> — выход\n\n\
+                <i>Просто пиши — сообщения появятся от бота</i>"
             } else {
-                "👻 Режим призрака включен (без сохранения)!\n/ghost off для выхода"
+                "👻 <b>Ghost Mode включен!</b> (без сохранения)\n\n\
+                Твои сообщения отправляются от имени бота.\n\
+                Примеры НЕ сохраняются.\n\n\
+                <b>Команды:</b>\n\
+                • <code>!status</code> — статус\n\
+                • <code>!exit</code> или <code>/ghost off</code> — выход"
             };
-            bot.send_message(chat_id, msg).await?;
+            bot.send_message(chat_id, help_msg)
+                .parse_mode(ParseMode::Html).await?;
+            log::info!("👻 Ghost mode enabled in chat {} (save={})", chat_id, save);
         }
         Some("off") => {
             state.toggle_ghost_mode(chat_id, false, false).await;
-            bot.send_message(chat_id, "👻 Режим призрака отключен.").await?;
+            bot.send_message(chat_id, "👻 Ghost Mode выключен. Бот снова отвечает сам.").await?;
+            log::info!("👻 Ghost mode disabled in chat {}", chat_id);
         }
         Some("status") => {
-            let status = if state.is_ghost_mode(chat_id).await { "🟢 Активен" } else { "🔴 Выключен" };
-            bot.send_message(chat_id, format!("👻 Статус: {}", status)).await?;
+            if state.is_ghost_mode(chat_id).await {
+                let ghost = state.ghost_mode.lock().await;
+                if let Some(settings) = ghost.get(&chat_id) {
+                    let duration = settings.started_at.elapsed();
+                    let mins = duration.as_secs() / 60;
+                    let save_status = if settings.save_as_examples { "✅" } else { "❌" };
+                    bot.send_message(chat_id, format!(
+                        "👻 <b>Ghost Mode активен</b>\n\n\
+                        ⏱ Время: {} мин\n\
+                        💾 Сохранение: {}\n\n\
+                        Выход: <code>/ghost off</code>",
+                        mins, save_status
+                    )).parse_mode(ParseMode::Html).await?;
+                }
+            } else {
+                bot.send_message(chat_id, "👻 Ghost Mode выключен").await?;
+            }
         }
         _ => {
-            bot.send_message(chat_id, "👻 <b>Режим призрака</b>\n\n/ghost on - включить\n/ghost on nosave - без сохранения\n/ghost off - выключить\n/ghost status - статус")
-                .parse_mode(ParseMode::Html).await?;
+            bot.send_message(chat_id, 
+                "👻 <b>Ghost Mode</b>\n\n\
+                Режим, в котором ты пишешь от имени бота.\n\
+                Полезно для обучения персоны на примерах.\n\n\
+                <b>Использование:</b>\n\
+                <code>/ghost on</code> — включить (с сохранением примеров)\n\
+                <code>/ghost on nosave</code> — включить (без сохранения)\n\
+                <code>/ghost off</code> — выключить\n\
+                <code>/ghost status</code> — статус\n\n\
+                <b>Как работает:</b>\n\
+                1. Включаешь ghost mode\n\
+                2. Пишешь сообщения — они появляются от бота\n\
+                3. Твои сообщения удаляются автоматически\n\
+                4. Если включено сохранение — примеры идут в RAG-память"
+            ).parse_mode(ParseMode::Html).await?;
         }
     }
     Ok(())
