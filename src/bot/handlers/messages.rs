@@ -210,7 +210,7 @@ fn build_prompt(
     }
 
     for msg in short_term_history {
-        let sender_name = msg.from().map(|u| u.first_name.clone()).unwrap_or_else(|| "Bot".to_string());
+        let sender_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "Bot".to_string());
         let text = msg.text().unwrap_or("");
         prompt.push_str(&format!("{}: {}\n", sender_name, text));
     }

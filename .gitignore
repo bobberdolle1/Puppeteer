@@ -12,3 +12,4 @@
 # Database
 /persona_forge.db*
 .sqlx/
+.kiro

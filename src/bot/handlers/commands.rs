@@ -6,730 +6,546 @@ use teloxide::types::ParseMode;
 pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> ResponseResult<()> {
     let text = msg.text().unwrap_or_default();
     let chat_id = msg.chat.id;
-    let user_id = msg.from().map(|u| u.id.0);
+    let user_id = msg.from.as_ref().map(|u| u.id.0);
 
-    // Log the received command
-    log::info!("Received command from user {}: {}", user_id.unwrap_or(0), text);
+    log::info!("Command from user {}: {}", user_id.unwrap_or(0), text);
 
-    // Check if the user is the owner
+    // Check owner
     if user_id != Some(state.config.owner_id) {
-        bot.send_message(chat_id, "❌ У вас нет прав для выполнения этой команды.")
-            .await?;
+        bot.send_message(chat_id, "❌ У вас нет прав для выполнения этой команды.").await?;
         return Ok(());
     }
 
-    let start_time = std::time::Instant::now();
-    let command_name = text.split_whitespace().next().unwrap_or("unknown").to_string();
-
-    if text.starts_with("/create_persona") {
-        handle_create_persona(bot, msg, &state).await?;
-    } else if text.starts_with("/list_personas") {
-        handle_list_personas(bot, msg, &state).await?;
-    } else if text.starts_with("/activate_persona") {
-        handle_activate_persona(bot, msg, &state).await?;
-    } else if text.starts_with("/update_persona") {
-        handle_update_persona(bot, msg, &state).await?;
-    } else if text.starts_with("/delete_persona") {
-        handle_delete_persona(bot, msg, &state).await?;
-    } else if text.starts_with("/set_model") {
-        handle_set_model(bot, msg, &state).await?;
-    } else if text.starts_with("/set_temperature") {
-        handle_set_temperature(bot, msg, &state).await?;
-    } else if text.starts_with("/set_max_tokens") {
-        handle_set_max_tokens(bot, msg, &state).await?;
-    } else if text.starts_with("/enable_rag") {
-        handle_enable_rag(bot, msg, &state).await?;
-    } else if text.starts_with("/disable_rag") {
-        handle_disable_rag(bot, msg, &state).await?;
-    } else if text.starts_with("/set_memory_depth") {
-        handle_set_memory_depth(bot, msg, &state).await?;
-    } else if text.starts_with("/status") {
-        handle_status(bot, msg, &state).await?;
-    } else if text.starts_with("/enable_auto_reply") {
-        handle_enable_auto_reply(bot, msg, &state).await?;
-    } else if text.starts_with("/disable_auto_reply") {
-        handle_disable_auto_reply(bot, msg, &state).await?;
-    } else if text.starts_with("/reply_to_all") {
-        handle_reply_to_all(bot, msg, &state).await?;
-    } else if text.starts_with("/reply_to_mention") {
-        handle_reply_to_mention(bot, msg, &state).await?;
-    } else if text.starts_with("/set_cooldown") {
-        handle_set_cooldown(bot, msg, &state).await?;
-    } else if text.starts_with("/menu") {
-        send_main_menu(bot, chat_id).await?;
-    } else if text.starts_with("/settings") {
-        send_settings_menu(bot, chat_id).await?;
-    } else if text.starts_with("/help") {
-        send_help_message(bot, chat_id).await?;
-    } else {
-        bot.send_message(chat_id, "❌ Неизвестная команда. Используйте /help для списка команд.")
-            .await?;
+    let cmd = text.split_whitespace().next().unwrap_or("");
+    
+    match cmd {
+        "/create_persona" => handle_create_persona(bot, msg, &state).await,
+        "/list_personas" => handle_list_personas(bot, msg, &state).await,
+        "/activate_persona" => handle_activate_persona(bot, msg, &state).await,
+        "/update_persona" => handle_update_persona(bot, msg, &state).await,
+        "/delete_persona" => handle_delete_persona(bot, msg, &state).await,
+        "/set_model" => handle_set_model(bot, msg).await,
+        "/set_temperature" => handle_set_temperature(bot, msg).await,
+        "/set_max_tokens" => handle_set_max_tokens(bot, msg).await,
+        "/enable_rag" => handle_enable_rag(bot, msg, &state).await,
+        "/disable_rag" => handle_disable_rag(bot, msg, &state).await,
+        "/set_memory_depth" => handle_set_memory_depth(bot, msg, &state).await,
+        "/status" => handle_status(bot, msg, &state).await,
+        "/enable_auto_reply" => handle_enable_auto_reply(bot, msg, &state).await,
+        "/disable_auto_reply" => handle_disable_auto_reply(bot, msg, &state).await,
+        "/reply_to_all" => handle_reply_to_all(bot, msg, &state).await,
+        "/reply_to_mention" => handle_reply_to_mention(bot, msg, &state).await,
+        "/set_cooldown" => handle_set_cooldown(bot, msg, &state).await,
+        "/menu" => send_main_menu(bot, chat_id).await,
+        "/settings" => send_settings_menu(bot, chat_id).await,
+        "/help" => send_help_message(bot, chat_id).await,
+        "/ghost" => handle_ghost_mode(bot, msg, &state).await,
+        "/triggers" | "/keywords" => handle_set_triggers(bot, msg, &state).await,
+        "/broadcast" => handle_broadcast(bot, msg, &state).await,
+        "/queue_stats" | "/stats" => handle_queue_stats(bot, msg, &state).await,
+        "/models" => handle_list_models(bot, msg, &state).await,
+        _ => {
+            bot.send_message(chat_id, "❌ Неизвестная команда. /help").await?;
+            Ok(())
+        }
     }
-
-    let duration = start_time.elapsed();
-    log::info!("Command {} processed in {}ms", command_name, duration.as_millis());
-
-    Ok(())
 }
 
 async fn handle_create_persona(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or_default();
     
-    // Parse the command: /create_persona name|prompt
-    let parts: Vec<&str> = text.splitn(2, " ").collect();
+    let parts: Vec<&str> = text.splitn(2, ' ').collect();
     if parts.len() < 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /create_persona название|описание_персоны")
-            .await?;
+        bot.send_message(chat_id, "❌ Формат: /create_persona название|описание").await?;
         return Ok(());
     }
 
-    let persona_data: Vec<&str> = parts[1].splitn(2, "|").collect();
-    if persona_data.len() != 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /create_persona название|описание_персоны")
-            .await?;
+    let data: Vec<&str> = parts[1].splitn(2, '|').collect();
+    if data.len() != 2 {
+        bot.send_message(chat_id, "❌ Формат: /create_persona название|описание").await?;
         return Ok(());
     }
 
-    let name = persona_data[0].trim();
-    let prompt = persona_data[1].trim();
-
+    let (name, prompt) = (data[0].trim(), data[1].trim());
     if name.is_empty() || prompt.is_empty() {
-        bot.send_message(chat_id, "❌ Название и описание персоны не могут быть пустыми.")
-            .await?;
+        bot.send_message(chat_id, "❌ Название и описание не могут быть пустыми.").await?;
         return Ok(());
     }
 
     match db::create_persona(&state.db_pool, name, prompt).await {
-        Ok(persona_id) => {
-            bot.send_message(chat_id, format!("✅ Персона создана с ID: {}", persona_id))
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to create persona: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при создании персоны.")
-                .await?;
-        }
+        Ok(id) => { bot.send_message(chat_id, format!("✅ Персона создана с ID: {}", id)).await?; }
+        Err(e) => { log::error!("Create persona error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
-async fn handle_list_personas(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+pub async fn handle_list_personas(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
-
     match db::get_all_personas(&state.db_pool).await {
-        Ok(personas) => {
-            if personas.is_empty() {
-                bot.send_message(chat_id, "📋 Нет созданных персон.")
-                    .await?;
-            } else {
-                let mut response = "📋 Список персон:\n\n".to_string();
-                for persona in personas {
-                    let status = if persona.is_active { "🟢 Активна" } else { "🔴 Неактивна" };
-                    response.push_str(&format!(
-                        "ID: {}\nНазвание: {}\nСтатус: {}\nОписание: {}\n\n",
-                        persona.id, persona.name, status, persona.prompt
-                    ));
-                }
-                bot.send_message(chat_id, response)
-                    .parse_mode(ParseMode::Html)
-                    .await?;
+        Ok(personas) if !personas.is_empty() => {
+            let mut text = "📋 <b>Персоны:</b>\n\n".to_string();
+            for p in personas {
+                let status = if p.is_active { "🟢" } else { "⚪" };
+                let preview = if p.prompt.len() > 80 { format!("{}...", &p.prompt[..80]) } else { p.prompt.clone() };
+                text.push_str(&format!("{} <b>{}</b> (ID: {})\n<i>{}</i>\n\n", status, p.name, p.id, preview));
             }
+            bot.send_message(chat_id, text).parse_mode(ParseMode::Html).await?;
         }
-        Err(e) => {
-            log::error!("Failed to get personas: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при получении списка персон.")
-                .await?;
-        }
+        _ => { bot.send_message(chat_id, "📋 Нет персон.").await?; }
     }
-
     Ok(())
 }
 
 async fn handle_activate_persona(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or_default();
-
-    // Parse the command: /activate_persona ID
     let parts: Vec<&str> = text.split_whitespace().collect();
+    
     if parts.len() != 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /activate_persona ID")
-            .await?;
+        bot.send_message(chat_id, "❌ Формат: /activate_persona ID").await?;
         return Ok(());
     }
 
-    let persona_id = match parts[1].parse::<i64>() {
+    let id = match parts[1].parse::<i64>() {
         Ok(id) => id,
-        Err(_) => {
-            bot.send_message(chat_id, "❌ ID персоны должен быть числом.")
-                .await?;
-            return Ok(());
-        }
+        Err(_) => { bot.send_message(chat_id, "❌ ID должен быть числом.").await?; return Ok(()); }
     };
 
-    match db::set_active_persona(&state.db_pool, persona_id).await {
-        Ok(()) => {
-            bot.send_message(chat_id, format!("✅ Персона с ID {} активирована.", persona_id))
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to activate persona: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при активации персоны. Возможно, персона с таким ID не существует.")
-                .await?;
-        }
+    match db::set_active_persona(&state.db_pool, id).await {
+        Ok(()) => { bot.send_message(chat_id, format!("✅ Персона {} активирована.", id)).await?; }
+        Err(e) => { log::error!("Activate error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
 async fn handle_update_persona(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or_default();
-
-    // Parse the command: /update_persona ID|name|prompt
-    let parts: Vec<&str> = text.splitn(2, " ").collect();
+    let parts: Vec<&str> = text.splitn(2, ' ').collect();
+    
     if parts.len() < 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /update_persona ID|название|описание_персоны")
-            .await?;
+        bot.send_message(chat_id, "❌ Формат: /update_persona ID|название|описание").await?;
         return Ok(());
     }
 
-    let update_data: Vec<&str> = parts[1].splitn(3, "|").collect();
-    if update_data.len() != 3 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /update_persona ID|название|описание_персоны")
-            .await?;
+    let data: Vec<&str> = parts[1].splitn(3, '|').collect();
+    if data.len() != 3 {
+        bot.send_message(chat_id, "❌ Формат: /update_persona ID|название|описание").await?;
         return Ok(());
     }
 
-    let id = match update_data[0].parse::<i64>() {
+    let id = match data[0].parse::<i64>() {
         Ok(id) => id,
-        Err(_) => {
-            bot.send_message(chat_id, "❌ ID персоны должен быть числом.")
-                .await?;
-            return Ok(());
-        }
+        Err(_) => { bot.send_message(chat_id, "❌ ID должен быть числом.").await?; return Ok(()); }
     };
 
-    let name = update_data[1].trim();
-    let prompt = update_data[2].trim();
-
-    if name.is_empty() || prompt.is_empty() {
-        bot.send_message(chat_id, "❌ Название и описание персоны не могут быть пустыми.")
-            .await?;
-        return Ok(());
-    }
-
+    let (name, prompt) = (data[1].trim(), data[2].trim());
     match db::update_persona(&state.db_pool, id, name, prompt).await {
-        Ok(()) => {
-            bot.send_message(chat_id, format!("✅ Персона с ID {} обновлена.", id))
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to update persona: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при обновлении персоны. Возможно, персона с таким ID не существует.")
-                .await?;
-        }
+        Ok(()) => { bot.send_message(chat_id, format!("✅ Персона {} обновлена.", id)).await?; }
+        Err(e) => { log::error!("Update error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
 async fn handle_delete_persona(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or_default();
-
-    // Parse the command: /delete_persona ID
     let parts: Vec<&str> = text.split_whitespace().collect();
+    
     if parts.len() != 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /delete_persona ID")
-            .await?;
+        bot.send_message(chat_id, "❌ Формат: /delete_persona ID").await?;
         return Ok(());
     }
 
-    let persona_id = match parts[1].parse::<i64>() {
+    let id = match parts[1].parse::<i64>() {
         Ok(id) => id,
-        Err(_) => {
-            bot.send_message(chat_id, "❌ ID персоны должен быть числом.")
-                .await?;
-            return Ok(());
-        }
+        Err(_) => { bot.send_message(chat_id, "❌ ID должен быть числом.").await?; return Ok(()); }
     };
 
-    match db::delete_persona(&state.db_pool, persona_id).await {
-        Ok(()) => {
-            bot.send_message(chat_id, format!("✅ Персона с ID {} удалена.", persona_id))
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to delete persona: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при удалении персоны. Возможно, персона с таким ID не существует.")
-                .await?;
-        }
+    match db::delete_persona(&state.db_pool, id).await {
+        Ok(()) => { bot.send_message(chat_id, format!("✅ Персона {} удалена.", id)).await?; }
+        Err(e) => { log::error!("Delete error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
-async fn handle_set_model(bot: Bot, msg: Message, _state: &AppState) -> ResponseResult<()> {
+async fn handle_set_model(bot: Bot, msg: Message) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or_default();
-
-    // Parse the command: /set_model model_name
     let parts: Vec<&str> = text.splitn(2, ' ').collect();
-    if parts.len() != 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /set_model название_модели")
-            .await?;
+    
+    if parts.len() != 2 || parts[1].trim().is_empty() {
+        bot.send_message(chat_id, "❌ Формат: /set_model название").await?;
         return Ok(());
     }
-
-    let model_name = parts[1].trim();
-    if model_name.is_empty() {
-        bot.send_message(chat_id, "❌ Название модели не может быть пустым.")
-            .await?;
-        return Ok(());
-    }
-
-    // In a real implementation, we would update the config in the database or state
-    // For now, we'll just send a confirmation message
-    bot.send_message(chat_id, format!("✅ Модель установлена: {}", model_name))
-        .await?;
-
+    bot.send_message(chat_id, format!("✅ Модель: {}", parts[1].trim())).await?;
     Ok(())
 }
 
-async fn handle_set_temperature(bot: Bot, msg: Message, _state: &AppState) -> ResponseResult<()> {
+async fn handle_set_temperature(bot: Bot, msg: Message) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or_default();
-
-    // Parse the command: /set_temperature value
     let parts: Vec<&str> = text.splitn(2, ' ').collect();
+    
     if parts.len() != 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /set_temperature значение (0.0-2.0)")
-            .await?;
+        bot.send_message(chat_id, "❌ Формат: /set_temperature 0.0-2.0").await?;
         return Ok(());
     }
 
-    let temp_str = parts[1].trim();
-    let temperature = match temp_str.parse::<f64>() {
-        Ok(temp) => {
-            if temp < 0.0 || temp > 2.0 {
-                bot.send_message(chat_id, "❌ Значение температуры должно быть в диапазоне от 0.0 до 2.0")
-                    .await?;
-                return Ok(());
-            }
-            temp
-        }
-        Err(_) => {
-            bot.send_message(chat_id, "❌ Значение температуры должно быть числом")
-                .await?;
-            return Ok(());
-        }
-    };
-
-    // In a real implementation, we would update the config in the database or state
-    // For now, we'll just send a confirmation message
-    bot.send_message(chat_id, format!("✅ Температура установлена: {}", temperature))
-        .await?;
-
+    match parts[1].trim().parse::<f64>() {
+        Ok(t) if (0.0..=2.0).contains(&t) => { bot.send_message(chat_id, format!("✅ Температура: {}", t)).await?; }
+        _ => { bot.send_message(chat_id, "❌ Значение должно быть 0.0-2.0").await?; }
+    }
     Ok(())
 }
 
-async fn handle_set_max_tokens(bot: Bot, msg: Message, _state: &AppState) -> ResponseResult<()> {
+async fn handle_set_max_tokens(bot: Bot, msg: Message) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or_default();
-
-    // Parse the command: /set_max_tokens value
     let parts: Vec<&str> = text.splitn(2, ' ').collect();
+    
     if parts.len() != 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /set_max_tokens значение")
-            .await?;
+        bot.send_message(chat_id, "❌ Формат: /set_max_tokens число").await?;
         return Ok(());
     }
 
-    let max_tokens_str = parts[1].trim();
-    let max_tokens = match max_tokens_str.parse::<u32>() {
-        Ok(tokens) => {
-            if tokens == 0 {
-                bot.send_message(chat_id, "❌ Количество токенов должно быть больше 0")
-                    .await?;
-                return Ok(());
-            }
-            tokens
-        }
-        Err(_) => {
-            bot.send_message(chat_id, "❌ Количество токенов должно быть числом")
-                .await?;
-            return Ok(());
-        }
-    };
-
-    // In a real implementation, we would update the config in the database or state
-    // For now, we'll just send a confirmation message
-    bot.send_message(chat_id, format!("✅ Максимальное количество токенов установлено: {}", max_tokens))
-        .await?;
-
+    match parts[1].trim().parse::<u32>() {
+        Ok(t) if t > 0 => { bot.send_message(chat_id, format!("✅ Макс. токенов: {}", t)).await?; }
+        _ => { bot.send_message(chat_id, "❌ Должно быть положительным числом").await?; }
+    }
     Ok(())
 }
 
-async fn handle_enable_rag(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
-    let chat_id = msg.chat.id;
 
+pub async fn handle_enable_rag(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    let chat_id = msg.chat.id;
     match db::toggle_rag_for_chat(&state.db_pool, chat_id.0, true).await {
-        Ok(()) => {
-            bot.send_message(chat_id, "✅ RAG включен для этого чата.")
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to enable RAG: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при включении RAG.")
-                .await?;
-        }
+        Ok(()) => { bot.send_message(chat_id, "✅ RAG включен.").await?; }
+        Err(e) => { log::error!("RAG error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
-async fn handle_disable_rag(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+pub async fn handle_disable_rag(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
-
     match db::toggle_rag_for_chat(&state.db_pool, chat_id.0, false).await {
-        Ok(()) => {
-            bot.send_message(chat_id, "✅ RAG отключен для этого чата.")
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to disable RAG: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при отключении RAG.")
-                .await?;
-        }
+        Ok(()) => { bot.send_message(chat_id, "✅ RAG отключен.").await?; }
+        Err(e) => { log::error!("RAG error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
 async fn handle_set_memory_depth(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or_default();
-
-    // Parse the command: /set_memory_depth value
     let parts: Vec<&str> = text.splitn(2, ' ').collect();
+    
     if parts.len() != 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /set_memory_depth значение")
-            .await?;
+        bot.send_message(chat_id, "❌ Формат: /set_memory_depth 1-50").await?;
         return Ok(());
     }
 
-    let depth_str = parts[1].trim();
-    let depth = match depth_str.parse::<u32>() {
-        Ok(d) => {
-            if d == 0 || d > 50 {
-                bot.send_message(chat_id, "❌ Глубина памяти должна быть от 1 до 50 сообщений")
-                    .await?;
-                return Ok(());
-            }
-            d
-        }
-        Err(_) => {
-            bot.send_message(chat_id, "❌ Глубина памяти должна быть числом")
-                .await?;
-            return Ok(());
-        }
+    let depth = match parts[1].trim().parse::<u32>() {
+        Ok(d) if d > 0 && d <= 50 => d,
+        _ => { bot.send_message(chat_id, "❌ Значение 1-50").await?; return Ok(()); }
     };
 
-    // Get current RAG setting to preserve it
-    let current_settings = match db::get_or_create_chat_settings(&state.db_pool, chat_id.0).await {
-        Ok(settings) => settings,
-        Err(e) => {
-            log::error!("Failed to get chat settings: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при получении настроек чата.")
-                .await?;
-            return Ok(());
-        }
-    };
+    let settings = db::get_or_create_chat_settings(&state.db_pool, chat_id.0).await
+        .unwrap_or(db::ChatSettings { chat_id: chat_id.0, auto_reply_enabled: true, reply_mode: "mention_only".into(), cooldown_seconds: 5, context_depth: 10, rag_enabled: true });
 
-    match db::update_rag_settings(&state.db_pool, chat_id.0, current_settings.rag_enabled, depth as i64).await {
-        Ok(()) => {
-            bot.send_message(chat_id, format!("✅ Глубина памяти установлена: {} сообщений", depth))
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to set memory depth: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при установке глубины памяти.")
-                .await?;
-        }
+    match db::update_rag_settings(&state.db_pool, chat_id.0, settings.rag_enabled, depth as i64).await {
+        Ok(()) => { bot.send_message(chat_id, format!("✅ Глубина памяти: {}", depth)).await?; }
+        Err(e) => { log::error!("Memory depth error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
-async fn handle_status(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+pub async fn handle_status(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
-
-    // Check Ollama status
-    let ollama_status = match state.llm_client.check_health().await {
-        Ok(healthy) => if healthy { "🟢 Работает" } else { "🔴 Недоступен" },
-        Err(_) => "🔴 Ошибка подключения",
+    
+    let ollama = if state.llm_client.check_health().await.unwrap_or(false) { "🟢" } else { "🔴" };
+    let db_ok = if db::check_db_health(&state.db_pool).await.unwrap_or(false) { "🟢" } else { "🔴" };
+    let persona = match db::get_active_persona(&state.db_pool).await {
+        Ok(Some(p)) => p.name,
+        _ => "Не выбрана".into(),
     };
+    let ghost = if state.is_ghost_mode(chat_id).await { "🟢" } else { "🔴" };
+    let stats = state.queue_stats.lock().await;
 
-    // Check DB status
-    let db_status = match db::check_db_health(&state.db_pool).await {
-        Ok(healthy) => if healthy { "🟢 Работает" } else { "🔴 Недоступна" },
-        Err(_) => "🔴 Ошибка подключения",
-    };
+    let text = format!(
+r#"📊 <b>Статус</b>
 
-    // Get active persona info
-    let active_persona = match db::get_active_persona(&state.db_pool).await {
-        Ok(Some(persona)) => format!("🟢 Активна: {} (ID: {})", persona.name, persona.id),
-        Ok(None) => "🟡 Не выбрана".to_string(),
-        Err(_) => "🔴 Ошибка получения".to_string(),
-    };
-
-    // Get current model
-    let current_model = &state.config.ollama_chat_model;
-
-    let status_text = format!(
-        r#"📊 <b>Статус бота PersonaForge</b>
-
-<b>Сервисы:</b>
-• Ollama: {}
-• База данных: {}
-
-<b>Конфигурация:</b>
-• Активная персона: {}
-• Текущая модель: {}
-
-<b>Параметры генерации:</b>
-• Температура: {}
-• Макс. токенов: {}"#,
-        ollama_status,
-        db_status,
-        active_persona,
-        current_model,
-        state.config.temperature,
-        state.config.max_tokens
+<b>Сервисы:</b> Ollama {} | БД {}
+<b>Персона:</b> {}
+<b>Призрак:</b> {}
+<b>Очередь:</b> {}/{} | Запросов: {} (✅{} ❌{})
+<b>Модель:</b> {}
+<b>Температура:</b> {} | Токены: {}"#,
+        ollama, db_ok, persona, ghost,
+        state.llm_semaphore.available_permits(),
+        state.config.max_concurrent_llm_requests.unwrap_or(3),
+        stats.total_requests, stats.successful_requests, stats.failed_requests,
+        state.config.ollama_chat_model,
+        state.config.temperature, state.config.max_tokens
     );
 
-    bot.send_message(chat_id, status_text)
-        .parse_mode(ParseMode::Html)
-        .await?;
-
+    bot.send_message(chat_id, text).parse_mode(ParseMode::Html).await?;
     Ok(())
 }
 
-async fn handle_enable_auto_reply(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+pub async fn handle_enable_auto_reply(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
-
     match db::toggle_auto_reply_for_chat(&state.db_pool, chat_id.0, true).await {
-        Ok(()) => {
-            bot.send_message(chat_id, "✅ Автоответы включены для этого чата.")
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to enable auto-reply: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при включении автоответов.")
-                .await?;
-        }
+        Ok(()) => { bot.send_message(chat_id, "✅ Автоответы включены.").await?; }
+        Err(e) => { log::error!("Auto-reply error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
-async fn handle_disable_auto_reply(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+pub async fn handle_disable_auto_reply(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
-
     match db::toggle_auto_reply_for_chat(&state.db_pool, chat_id.0, false).await {
-        Ok(()) => {
-            bot.send_message(chat_id, "✅ Автоответы отключены для этого чата.")
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to disable auto-reply: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при отключении автоответов.")
-                .await?;
-        }
+        Ok(()) => { bot.send_message(chat_id, "✅ Автоответы отключены.").await?; }
+        Err(e) => { log::error!("Auto-reply error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
-async fn handle_reply_to_all(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+pub async fn handle_reply_to_all(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
-
     match db::update_reply_mode_for_chat(&state.db_pool, chat_id.0, "all_messages").await {
-        Ok(()) => {
-            bot.send_message(chat_id, "✅ Режим ответа изменен: на все сообщения.")
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to set reply mode to all messages: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при изменении режима ответа.")
-                .await?;
-        }
+        Ok(()) => { bot.send_message(chat_id, "✅ Режим: все сообщения.").await?; }
+        Err(e) => { log::error!("Reply mode error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
-async fn handle_reply_to_mention(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+pub async fn handle_reply_to_mention(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
-
     match db::update_reply_mode_for_chat(&state.db_pool, chat_id.0, "mention_only").await {
-        Ok(()) => {
-            bot.send_message(chat_id, "✅ Режим ответа изменен: только по упоминанию/команде.")
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to set reply mode to mention only: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при изменении режима ответа.")
-                .await?;
-        }
+        Ok(()) => { bot.send_message(chat_id, "✅ Режим: только упоминания.").await?; }
+        Err(e) => { log::error!("Reply mode error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
 async fn handle_set_cooldown(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or_default();
-
-    // Parse the command: /set_cooldown value
     let parts: Vec<&str> = text.splitn(2, ' ').collect();
+    
     if parts.len() != 2 {
-        bot.send_message(chat_id, "❌ Неправильный формат команды. Используйте: /set_cooldown значение (в секундах)")
-            .await?;
+        bot.send_message(chat_id, "❌ Формат: /set_cooldown секунды").await?;
         return Ok(());
     }
 
-    let cooldown_str = parts[1].trim();
-    let cooldown = match cooldown_str.parse::<u32>() {
-        Ok(c) => {
-            if c > 300 { // Max 5 minutes
-                bot.send_message(chat_id, "❌ Время задержки не должно превышать 300 секунд (5 минут)")
-                    .await?;
-                return Ok(());
-            }
-            c
-        }
-        Err(_) => {
-            bot.send_message(chat_id, "❌ Время задержки должно быть числом (в секундах)")
-                .await?;
-            return Ok(());
-        }
+    let cooldown = match parts[1].trim().parse::<u32>() {
+        Ok(c) if c <= 300 => c,
+        _ => { bot.send_message(chat_id, "❌ Значение 0-300").await?; return Ok(()); }
     };
 
     match db::update_cooldown_for_chat(&state.db_pool, chat_id.0, cooldown as i64).await {
-        Ok(()) => {
-            bot.send_message(chat_id, format!("✅ Время задержки между ответами установлено: {} секунд", cooldown))
-                .await?;
-        }
-        Err(e) => {
-            log::error!("Failed to set cooldown: {}", e);
-            bot.send_message(chat_id, "❌ Ошибка при установке времени задержки.")
-                .await?;
-        }
+        Ok(()) => { bot.send_message(chat_id, format!("✅ Cooldown: {}с", cooldown)).await?; }
+        Err(e) => { log::error!("Cooldown error: {}", e); bot.send_message(chat_id, "❌ Ошибка.").await?; }
     }
-
     Ok(())
 }
 
-async fn send_help_message(bot: Bot, chat_id: ChatId) -> ResponseResult<()> {
-    let help_text = r#"🤖 <b>Команды бота PersonaForge:</b>
 
-<b>Управление персонами:</b>
-• /create_persona название|описание - Создать новую персону
-• /list_personas - Показать все персоны
-• /activate_persona ID - Активировать персону по ID
-• /update_persona ID|название|описание - Обновить персону
-• /delete_persona ID - Удалить персону по ID
+async fn handle_ghost_mode(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    let chat_id = msg.chat.id;
+    let text = msg.text().unwrap_or_default();
+    let parts: Vec<&str> = text.split_whitespace().collect();
 
-<b>Настройки модели:</b>
-• /set_model название - Установить модель Ollama
-• /set_temperature значение - Установить температуру (0.0-2.0)
-• /set_max_tokens значение - Установить максимальное количество токенов
+    match parts.get(1).map(|s| *s) {
+        Some("on") => {
+            let save = parts.get(2).map(|s| *s) != Some("nosave");
+            state.toggle_ghost_mode(chat_id, true, save).await;
+            let msg = if save {
+                "👻 Режим призрака включен!\nСообщения сохраняются как примеры.\n/ghost off для выхода"
+            } else {
+                "👻 Режим призрака включен (без сохранения)!\n/ghost off для выхода"
+            };
+            bot.send_message(chat_id, msg).await?;
+        }
+        Some("off") => {
+            state.toggle_ghost_mode(chat_id, false, false).await;
+            bot.send_message(chat_id, "👻 Режим призрака отключен.").await?;
+        }
+        Some("status") => {
+            let status = if state.is_ghost_mode(chat_id).await { "🟢 Активен" } else { "🔴 Выключен" };
+            bot.send_message(chat_id, format!("👻 Статус: {}", status)).await?;
+        }
+        _ => {
+            bot.send_message(chat_id, "👻 <b>Режим призрака</b>\n\n/ghost on - включить\n/ghost on nosave - без сохранения\n/ghost off - выключить\n/ghost status - статус")
+                .parse_mode(ParseMode::Html).await?;
+        }
+    }
+    Ok(())
+}
 
-<b>Настройки RAG:</b>
-• /enable_rag - Включить RAG (поиск по памяти)
-• /disable_rag - Отключить RAG (поиск по памяти)
-• /set_memory_depth значение - Установить глубину памяти (1-50 сообщений)
+async fn handle_set_triggers(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    use crate::state::WizardState;
+    let chat_id = msg.chat.id;
+    let text = msg.text().unwrap_or_default();
+    let parts: Vec<&str> = text.splitn(2, ' ').collect();
 
-<b>Настройки чата:</b>
-• /enable_auto_reply - Включить автоответы
-• /disable_auto_reply - Отключить автоответы
-• /reply_to_all - Отвечать на все сообщения
-• /reply_to_mention - Отвечать только по упоминанию/команде
-• /set_cooldown значение - Установить задержку между ответами (в секундах)
+    match parts.get(1) {
+        Some(&"clear") => {
+            state.keyword_triggers.lock().await.remove(&chat_id);
+            bot.send_message(chat_id, "✅ Триггеры удалены.").await?;
+        }
+        Some(kw) if !kw.is_empty() => {
+            let keywords: Vec<String> = kw.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect();
+            if keywords.is_empty() {
+                bot.send_message(chat_id, "❌ Введите слова через запятую.").await?;
+            } else {
+                state.keyword_triggers.lock().await.insert(chat_id, keywords.clone());
+                bot.send_message(chat_id, format!("✅ Триггеры: {}", keywords.join(", "))).await?;
+            }
+        }
+        _ => {
+            let current = state.keyword_triggers.lock().await.get(&chat_id).cloned();
+            match current {
+                Some(kw) if !kw.is_empty() => {
+                    bot.send_message(chat_id, format!("🔑 Триггеры: {}\n\n/triggers clear - удалить", kw.join(", "))).await?;
+                }
+                _ => {
+                    state.set_wizard_state(chat_id, WizardState::SettingKeywords).await;
+                    bot.send_message(chat_id, "🔑 Введите ключевые слова через запятую:\n\n/cancel для отмены").await?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
 
-<b>Системная информация:</b>
-• /status - Показать статус бота и сервисов
+async fn handle_broadcast(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    let chat_id = msg.chat.id;
+    let text = msg.text().unwrap_or_default();
+    let parts: Vec<&str> = text.splitn(2, ' ').collect();
 
-Пример: <code>/create_persona Джарвис|Ты умный помощник Илона Маска</code>
+    match parts.get(1) {
+        Some(message) if !message.is_empty() => {
+            let chats = db::get_all_chat_ids(&state.db_pool).await.unwrap_or_default();
+            if chats.is_empty() {
+                bot.send_message(chat_id, "❌ Нет чатов.").await?;
+                return Ok(());
+            }
 
-<b>Доступно только владельцу бота.</b>"#;
+            let (mut ok, mut err) = (0, 0);
+            for target in &chats {
+                match bot.send_message(ChatId(*target), *message).await {
+                    Ok(_) => ok += 1,
+                    Err(_) => err += 1,
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+            bot.send_message(chat_id, format!("📢 Рассылка: ✅{} ❌{}", ok, err)).await?;
+        }
+        _ => {
+            bot.send_message(chat_id, "📢 Формат: /broadcast текст").await?;
+        }
+    }
+    Ok(())
+}
 
-    bot.send_message(chat_id, help_text)
-        .parse_mode(ParseMode::Html)
-        .await?;
+async fn handle_queue_stats(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    let chat_id = msg.chat.id;
+    let stats = state.queue_stats.lock().await.clone();
+    let available = state.llm_semaphore.available_permits();
+    let max = state.config.max_concurrent_llm_requests.unwrap_or(3);
 
+    let text = format!(
+r#"📊 <b>Очередь LLM</b>
+
+Слотов: {}/{}
+Запросов: {}
+✅ Успешных: {}
+❌ Ошибок: {}
+⏱️ Таймаутов: {}
+⚡ Среднее время: {}мс"#,
+        available, max, stats.total_requests, stats.successful_requests,
+        stats.failed_requests, stats.queue_timeouts, stats.avg_response_time_ms
+    );
+
+    bot.send_message(chat_id, text).parse_mode(ParseMode::Html).await?;
+    Ok(())
+}
+
+async fn handle_list_models(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    let chat_id = msg.chat.id;
+    match state.llm_client.list_models().await {
+        Ok(models) if !models.is_empty() => {
+            let list = models.iter().map(|m| format!("• {}", m)).collect::<Vec<_>>().join("\n");
+            bot.send_message(chat_id, format!("🤖 <b>Модели:</b>\n\n{}\n\nТекущая: {}", list, state.config.ollama_chat_model))
+                .parse_mode(ParseMode::Html).await?;
+        }
+        _ => { bot.send_message(chat_id, "❌ Модели не найдены.").await?; }
+    }
     Ok(())
 }
 
 pub async fn send_main_menu(bot: Bot, chat_id: ChatId) -> ResponseResult<()> {
-    use teloxide::types::InlineKeyboardButton;
-    use teloxide::types::InlineKeyboardMarkup;
-
-    let keyboard = InlineKeyboardMarkup::new(vec![
-        vec![
-            InlineKeyboardButton::callback("👤 Управление персонами", "personas_menu"),
-        ],
-        vec![
-            InlineKeyboardButton::callback("⚙️ Настройки модели", "model_settings"),
-        ],
-        vec![
-            InlineKeyboardButton::callback("🧠 Настройки RAG", "rag_settings"),
-        ],
-        vec![
-            InlineKeyboardButton::callback("💬 Настройки чата", "chat_settings"),
-        ],
-        vec![
-            InlineKeyboardButton::callback("📊 Статус системы", "system_status"),
-        ],
-        vec![
-            InlineKeyboardButton::callback("ℹ️ Помощь", "help_info"),
-        ],
+    use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
+    let kb = InlineKeyboardMarkup::new(vec![
+        vec![InlineKeyboardButton::callback("👤 Персоны", "personas_menu")],
+        vec![InlineKeyboardButton::callback("⚙️ Модель", "model_settings")],
+        vec![InlineKeyboardButton::callback("🧠 RAG", "rag_settings")],
+        vec![InlineKeyboardButton::callback("💬 Чат", "chat_settings")],
+        vec![InlineKeyboardButton::callback("👻 Призрак", "ghost_menu")],
+        vec![InlineKeyboardButton::callback("📊 Статус", "system_status")],
+        vec![InlineKeyboardButton::callback("ℹ️ Помощь", "help_info")],
     ]);
-
-    bot.send_message(chat_id, "🤖 <b>Главное меню управления ботом PersonaForge</b>\n\nВыберите раздел для управления:")
-        .parse_mode(teloxide::types::ParseMode::Html)
-        .reply_markup(keyboard)
-        .await?;
-
+    bot.send_message(chat_id, "🤖 <b>PersonaForge</b>").parse_mode(ParseMode::Html).reply_markup(kb).await?;
     Ok(())
 }
 
 pub async fn send_settings_menu(bot: Bot, chat_id: ChatId) -> ResponseResult<()> {
-    use teloxide::types::InlineKeyboardButton;
-    use teloxide::types::InlineKeyboardMarkup;
-
-    let keyboard = InlineKeyboardMarkup::new(vec![
-        vec![
-            InlineKeyboardButton::callback("🎭 Сменить персону", "change_persona"),
-        ],
-        vec![
-            InlineKeyboardButton::callback("🧠 Настройки памяти", "memory_settings"),
-        ],
-        vec![
-            InlineKeyboardButton::callback("⚙️ Параметры модели", "model_params"),
-        ],
-        vec![
-            InlineKeyboardButton::callback("🔙 Назад", "main_menu"),
-        ],
+    use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
+    let kb = InlineKeyboardMarkup::new(vec![
+        vec![InlineKeyboardButton::callback("🎭 Персона", "personas_menu")],
+        vec![InlineKeyboardButton::callback("🧠 Память", "memory_settings")],
+        vec![InlineKeyboardButton::callback("⚙️ Модель", "model_params")],
+        vec![InlineKeyboardButton::callback("🔙 Назад", "main_menu")],
     ]);
+    bot.send_message(chat_id, "🔧 <b>Настройки</b>").parse_mode(ParseMode::Html).reply_markup(kb).await?;
+    Ok(())
+}
 
-    bot.send_message(chat_id, "🔧 <b>Настройки бота</b>\n\nВыберите параметр для настройки:")
-        .parse_mode(teloxide::types::ParseMode::Html)
-        .reply_markup(keyboard)
-        .await?;
+pub async fn send_help_message(bot: Bot, chat_id: ChatId) -> ResponseResult<()> {
+    let text = r#"🤖 <b>PersonaForge</b>
 
+<b>👤 Персоны:</b>
+/create_persona название|описание
+/list_personas
+/activate_persona ID
+/update_persona ID|название|описание
+/delete_persona ID
+
+<b>⚙️ Модель:</b>
+/set_model, /set_temperature, /set_max_tokens
+/models - список моделей
+
+<b>🧠 RAG:</b>
+/enable_rag, /disable_rag
+/set_memory_depth 1-50
+
+<b>💬 Чат:</b>
+/enable_auto_reply, /disable_auto_reply
+/reply_to_all, /reply_to_mention
+/set_cooldown, /triggers
+
+<b>👻 Призрак:</b>
+/ghost on|off|status
+
+<b>📊 Система:</b>
+/status, /stats, /broadcast
+
+<b>🎛️ Меню:</b>
+/menu, /settings"#;
+
+    bot.send_message(chat_id, text).parse_mode(ParseMode::Html).await?;
     Ok(())
 }

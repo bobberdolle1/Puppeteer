@@ -1,5 +1,4 @@
 use bincode::{deserialize, serialize};
-use futures::stream::TryStreamExt;
 use sqlx::{sqlite::SqliteRow, FromRow, Row, SqlitePool};
 use teloxide::types::Message;
 
@@ -284,7 +283,7 @@ pub async fn update_cooldown_for_chat(
 // --- Public Functions: Messages & RAG ---
 
 pub async fn save_message(pool: &SqlitePool, msg: &Message) -> Result<i64, sqlx::Error> {
-    let user = msg.from();
+    let user = msg.from.as_ref();
     let user_id = user.map(|u| u.id.0 as i64);
     let username = user.map(|u| u.full_name());
     let text = msg.text();
@@ -399,6 +398,30 @@ pub async fn check_db_health(pool: &SqlitePool) -> Result<bool, sqlx::Error> {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
     }
+}
+
+// --- Public Functions: Broadcast ---
+
+/// Get all unique chat IDs from messages table for broadcast
+pub async fn get_all_chat_ids(pool: &SqlitePool) -> Result<Vec<i64>, sqlx::Error> {
+    let chat_ids: Vec<i64> = sqlx::query("SELECT DISTINCT chat_id FROM messages WHERE chat_id != 0")
+        .map(|row: SqliteRow| row.get("chat_id"))
+        .fetch_all(pool)
+        .await?;
+    
+    Ok(chat_ids)
+}
+
+/// Get message count per chat for statistics
+pub async fn get_chat_stats(pool: &SqlitePool) -> Result<Vec<(i64, i64)>, sqlx::Error> {
+    let stats: Vec<(i64, i64)> = sqlx::query(
+        "SELECT chat_id, COUNT(*) as msg_count FROM messages GROUP BY chat_id ORDER BY msg_count DESC"
+    )
+    .map(|row: SqliteRow| (row.get("chat_id"), row.get("msg_count")))
+    .fetch_all(pool)
+    .await?;
+    
+    Ok(stats)
 }
 
 // --- Private Helpers ---

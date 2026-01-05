@@ -1528,6 +1528,7 @@ name = "persona_forge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "bincode",
  "chrono",
  "dotenv",
@@ -1535,6 +1536,7 @@ dependencies = [
  "futures",
  "log",
  "pretty_env_logger",
+ "rand 0.8.5",
  "reqwest 0.13.1",
  "serde",
  "sqlx",
