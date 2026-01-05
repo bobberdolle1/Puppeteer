@@ -1,5 +1,7 @@
 use crate::config::Config;
 use crate::llm::client::LlmClient;
+use crate::voice::VoiceClient;
+use crate::web::search::WebSearchClient;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -64,6 +66,8 @@ pub struct QueueStats {
 pub struct AppState {
     pub config: Arc<Config>,
     pub llm_client: LlmClient,
+    pub web_search: WebSearchClient,
+    pub voice_client: VoiceClient,
     pub dialogues: DialogueState,
     pub db_pool: SqlitePool,
     pub admin_cache: AdminCache,
@@ -82,6 +86,8 @@ impl AppState {
         Self {
             config: config_arc.clone(),
             llm_client: LlmClient::new(config_arc.ollama_url.clone()),
+            web_search: WebSearchClient::new(),
+            voice_client: VoiceClient::new(config_arc.whisper_url.clone()),
             dialogues: Arc::new(Mutex::new(HashMap::new())),
             db_pool,
             admin_cache: Arc::new(Mutex::new(HashMap::new())),

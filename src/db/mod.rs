@@ -1,4 +1,5 @@
 use bincode::{deserialize, serialize};
+use chrono::{NaiveDateTime, Utc};
 use sqlx::{sqlite::SqliteRow, FromRow, Row, SqlitePool};
 use teloxide::types::Message;
 
@@ -21,6 +22,19 @@ pub struct MemoryChunk {
     pub message_id: i64,
     pub chunk_text: String,
     pub embedding: Option<Vec<u8>>,
+    pub importance_score: Option<f64>,
+    pub created_at: Option<NaiveDateTime>,
+}
+
+#[derive(Debug, FromRow, Clone)]
+pub struct ChatSummary {
+    pub id: i64,
+    pub chat_id: i64,
+    pub summary_text: String,
+    pub messages_from: i64,
+    pub messages_to: i64,
+    pub message_count: i64,
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug, FromRow, Clone)]
@@ -356,6 +370,8 @@ pub async fn find_similar_chunks(
         message_id: row.get("message_id"),
         chunk_text: row.get("chunk_text"),
         embedding: row.get("embedding"),
+        importance_score: None,
+        created_at: None,
     })
     .fetch_all(pool)
     .await?;
@@ -436,4 +452,229 @@ fn cosine_similarity(v1: &[f64], v2: &[f64]) -> f64 {
     } else {
         dot_product / (norm_v1 * norm_v2)
     }
+}
+
+// --- Time-Decay RAG Functions ---
+
+/// Calculate time decay factor (exponential decay)
+/// decay_rate: how fast memories fade (0.1 = slow, 1.0 = fast)
+/// hours_old: age of the memory in hours
+fn calculate_time_decay(hours_old: f64, decay_rate: f64) -> f64 {
+    (-decay_rate * hours_old / 24.0).exp() // Decay per day
+}
+
+/// Find similar chunks with time-decay weighting
+pub async fn find_similar_chunks_with_decay(
+    pool: &SqlitePool,
+    chat_id: i64,
+    query_embedding: &[f64],
+    limit: u32,
+    decay_rate: f64,
+) -> Result<Vec<String>, sqlx::Error> {
+    let chunks: Vec<(MemoryChunk, NaiveDateTime)> = sqlx::query(
+        r#"
+        SELECT mc.id, mc.message_id, mc.chunk_text, mc.embedding, 
+               mc.importance_score, mc.created_at, m.sent_at
+        FROM memory_chunks AS mc
+        JOIN messages m ON m.id = mc.message_id
+        WHERE m.chat_id = ? AND mc.embedding IS NOT NULL
+        "#,
+    )
+    .bind(chat_id)
+    .map(|row: SqliteRow| {
+        let chunk = MemoryChunk {
+            id: row.get("id"),
+            message_id: row.get("message_id"),
+            chunk_text: row.get("chunk_text"),
+            embedding: row.get("embedding"),
+            importance_score: row.get::<Option<f64>, _>("importance_score"),
+            created_at: row.get::<Option<NaiveDateTime>, _>("created_at"),
+        };
+        let sent_at: NaiveDateTime = row.get("sent_at");
+        (chunk, sent_at)
+    })
+    .fetch_all(pool)
+    .await?;
+
+    let now = Utc::now().naive_utc();
+    
+    let mut scored_chunks: Vec<(f64, String)> = chunks
+        .into_iter()
+        .filter_map(|(chunk, sent_at)| {
+            if let Some(embedding_bytes) = chunk.embedding {
+                match deserialize::<Vec<f64>>(&embedding_bytes) {
+                    Ok(decoded_embedding) => {
+                        let similarity = cosine_similarity(query_embedding, &decoded_embedding);
+                        
+                        // Calculate time decay
+                        let hours_old = (now - sent_at).num_hours() as f64;
+                        let time_decay = calculate_time_decay(hours_old, decay_rate);
+                        
+                        // Combine similarity with time decay and importance
+                        let importance = chunk.importance_score.unwrap_or(1.0);
+                        let final_score = similarity * time_decay * importance;
+                        
+                        Some((final_score, chunk.chunk_text))
+                    }
+                    Err(e) => {
+                        log::error!("Failed to deserialize embedding: {}", e);
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    scored_chunks.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    Ok(scored_chunks
+        .into_iter()
+        .take(limit as usize)
+        .map(|(_, text)| text)
+        .collect())
+}
+
+/// Update importance score for a memory chunk
+pub async fn update_chunk_importance(
+    pool: &SqlitePool,
+    chunk_id: i64,
+    importance: f64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE memory_chunks SET importance_score = ? WHERE id = ?")
+        .bind(importance)
+        .bind(chunk_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+// --- Summarization Functions ---
+
+/// Save a chat summary
+pub async fn save_chat_summary(
+    pool: &SqlitePool,
+    chat_id: i64,
+    summary_text: &str,
+    messages_from: i64,
+    messages_to: i64,
+    message_count: i64,
+) -> Result<i64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        INSERT INTO chat_summaries (chat_id, summary_text, messages_from, messages_to, message_count)
+        VALUES (?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(chat_id)
+    .bind(summary_text)
+    .bind(messages_from)
+    .bind(messages_to)
+    .bind(message_count)
+    .execute(pool)
+    .await?;
+
+    Ok(result.last_insert_rowid())
+}
+
+/// Get recent summaries for a chat
+pub async fn get_chat_summaries(
+    pool: &SqlitePool,
+    chat_id: i64,
+    limit: u32,
+) -> Result<Vec<ChatSummary>, sqlx::Error> {
+    sqlx::query(
+        r#"
+        SELECT id, chat_id, summary_text, messages_from, messages_to, message_count, created_at
+        FROM chat_summaries
+        WHERE chat_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        "#,
+    )
+    .bind(chat_id)
+    .bind(limit)
+    .map(|row: SqliteRow| ChatSummary {
+        id: row.get("id"),
+        chat_id: row.get("chat_id"),
+        summary_text: row.get("summary_text"),
+        messages_from: row.get("messages_from"),
+        messages_to: row.get("messages_to"),
+        message_count: row.get("message_count"),
+        created_at: row.get("created_at"),
+    })
+    .fetch_all(pool)
+    .await
+}
+
+/// Get messages for summarization (messages not yet summarized)
+pub async fn get_messages_for_summary(
+    pool: &SqlitePool,
+    chat_id: i64,
+    limit: u32,
+) -> Result<Vec<DbMessage>, sqlx::Error> {
+    // Get the last summarized message ID
+    let last_summary: Option<i64> = sqlx::query(
+        "SELECT MAX(messages_to) as last_id FROM chat_summaries WHERE chat_id = ?"
+    )
+    .bind(chat_id)
+    .map(|row: SqliteRow| row.get("last_id"))
+    .fetch_optional(pool)
+    .await?
+    .flatten();
+
+    let last_id = last_summary.unwrap_or(0);
+
+    sqlx::query(
+        r#"
+        SELECT id, message_id, chat_id, user_id, username, text, sent_at
+        FROM messages
+        WHERE chat_id = ? AND id > ? AND text IS NOT NULL
+        ORDER BY id ASC
+        LIMIT ?
+        "#,
+    )
+    .bind(chat_id)
+    .bind(last_id)
+    .bind(limit)
+    .map(|row: SqliteRow| DbMessage {
+        id: row.get("id"),
+        message_id: row.get("message_id"),
+        chat_id: row.get("chat_id"),
+        user_id: row.get("user_id"),
+        username: row.get("username"),
+        text: row.get("text"),
+        sent_at: row.get("sent_at"),
+    })
+    .fetch_all(pool)
+    .await
+}
+
+/// Count unsummarized messages for a chat
+pub async fn count_unsummarized_messages(
+    pool: &SqlitePool,
+    chat_id: i64,
+) -> Result<i64, sqlx::Error> {
+    let last_summary: Option<i64> = sqlx::query(
+        "SELECT MAX(messages_to) as last_id FROM chat_summaries WHERE chat_id = ?"
+    )
+    .bind(chat_id)
+    .map(|row: SqliteRow| row.get("last_id"))
+    .fetch_optional(pool)
+    .await?
+    .flatten();
+
+    let last_id = last_summary.unwrap_or(0);
+
+    let count: i64 = sqlx::query(
+        "SELECT COUNT(*) as cnt FROM messages WHERE chat_id = ? AND id > ? AND text IS NOT NULL"
+    )
+    .bind(chat_id)
+    .bind(last_id)
+    .map(|row: SqliteRow| row.get("cnt"))
+    .fetch_one(pool)
+    .await?;
+
+    Ok(count)
 }
