@@ -1,0 +1,8 @@
+target/
+.git/
+.env
+*.db
+data/
+.kiro/
+.vscode/
+*.backup

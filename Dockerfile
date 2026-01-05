@@ -1,13 +1,13 @@
 # Stage 1: Build the application
-FROM rust:1.78 as chef
+FROM rust:1.83 AS chef
 WORKDIR /app
 RUN cargo install cargo-chef
 
-FROM chef as planner
+FROM chef AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM chef as builder
+FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching layer
 RUN cargo chef cook --release --recipe-path recipe.json
@@ -16,7 +16,7 @@ COPY . .
 RUN cargo build --release --bin PersonaForge
 
 # Stage 2: Create the final, minimal image
-FROM debian:bookworm-slim as runtime
+FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
 # Install dependencies
