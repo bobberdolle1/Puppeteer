@@ -8,12 +8,18 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
     let chat_id = msg.chat.id;
     let user_id = msg.from().map(|u| u.id.0);
 
+    // Log the received command
+    log::info!("Received command from user {}: {}", user_id.unwrap_or(0), text);
+
     // Check if the user is the owner
     if user_id != Some(state.config.owner_id) {
         bot.send_message(chat_id, "❌ У вас нет прав для выполнения этой команды.")
             .await?;
         return Ok(());
     }
+
+    let start_time = std::time::Instant::now();
+    let command_name = text.split_whitespace().next().unwrap_or("unknown").to_string();
 
     if text.starts_with("/create_persona") {
         handle_create_persona(bot, msg, &state).await?;
@@ -49,12 +55,19 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
         handle_reply_to_mention(bot, msg, &state).await?;
     } else if text.starts_with("/set_cooldown") {
         handle_set_cooldown(bot, msg, &state).await?;
+    } else if text.starts_with("/menu") {
+        send_main_menu(bot, chat_id).await?;
+    } else if text.starts_with("/settings") {
+        send_settings_menu(bot, chat_id).await?;
     } else if text.starts_with("/help") {
         send_help_message(bot, chat_id).await?;
     } else {
         bot.send_message(chat_id, "❌ Неизвестная команда. Используйте /help для списка команд.")
             .await?;
     }
+
+    let duration = start_time.elapsed();
+    log::info!("Command {} processed in {}ms", command_name, duration.as_millis());
 
     Ok(())
 }
@@ -656,6 +669,66 @@ async fn send_help_message(bot: Bot, chat_id: ChatId) -> ResponseResult<()> {
 
     bot.send_message(chat_id, help_text)
         .parse_mode(ParseMode::Html)
+        .await?;
+
+    Ok(())
+}
+
+pub async fn send_main_menu(bot: Bot, chat_id: ChatId) -> ResponseResult<()> {
+    use teloxide::types::InlineKeyboardButton;
+    use teloxide::types::InlineKeyboardMarkup;
+
+    let keyboard = InlineKeyboardMarkup::new(vec![
+        vec![
+            InlineKeyboardButton::callback("👤 Управление персонами", "personas_menu"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("⚙️ Настройки модели", "model_settings"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("🧠 Настройки RAG", "rag_settings"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("💬 Настройки чата", "chat_settings"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("📊 Статус системы", "system_status"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("ℹ️ Помощь", "help_info"),
+        ],
+    ]);
+
+    bot.send_message(chat_id, "🤖 <b>Главное меню управления ботом PersonaForge</b>\n\nВыберите раздел для управления:")
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .reply_markup(keyboard)
+        .await?;
+
+    Ok(())
+}
+
+pub async fn send_settings_menu(bot: Bot, chat_id: ChatId) -> ResponseResult<()> {
+    use teloxide::types::InlineKeyboardButton;
+    use teloxide::types::InlineKeyboardMarkup;
+
+    let keyboard = InlineKeyboardMarkup::new(vec![
+        vec![
+            InlineKeyboardButton::callback("🎭 Сменить персону", "change_persona"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("🧠 Настройки памяти", "memory_settings"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("⚙️ Параметры модели", "model_params"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("🔙 Назад", "main_menu"),
+        ],
+    ]);
+
+    bot.send_message(chat_id, "🔧 <b>Настройки бота</b>\n\nВыберите параметр для настройки:")
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .reply_markup(keyboard)
         .await?;
 
     Ok(())

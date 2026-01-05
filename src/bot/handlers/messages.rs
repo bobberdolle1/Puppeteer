@@ -87,19 +87,23 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     log::debug!("Prompt for chat {}: {}", chat_id, prompt);
 
     // --- Generate Response ---
+    let start_time = std::time::Instant::now();
     match state.llm_client.generate(&state.config.ollama_chat_model, &prompt, state.config.temperature, state.config.max_tokens).await {
         Ok(response_text) => {
+            let response_time = start_time.elapsed().as_millis();
+
             // Apply human-like behavior rules
             let processed_response = apply_human_behavior_rules(response_text, &state.config.bot_name);
 
-            log::info!("LLM response for chat {}: {}", chat_id, processed_response);
+            log::info!("LLM response for chat {}: {} (took {}ms)", chat_id, processed_response, response_time);
             if let Ok(sent_msg) = bot.send_message(chat_id, &processed_response).await {
                 save_and_embed_message(&state, &sent_msg).await;
                 add_message_to_history(state.dialogues.clone(), &sent_msg).await;
             }
         }
         Err(e) => {
-            log::error!("Failed to get response from LLM: {}", e);
+            let response_time = start_time.elapsed().as_millis();
+            log::error!("Failed to get response from LLM after {}ms: {}", response_time, e);
             bot.send_message(chat_id, "Не удалось сгенерировать ответ.").await?;
         }
     }

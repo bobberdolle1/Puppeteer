@@ -48,6 +48,7 @@ impl LlmClient {
     }
 
     pub async fn generate(&self, model: &str, prompt: &str, temperature: f64, max_tokens: u32) -> Result<String, reqwest::Error> {
+        let start_time = std::time::Instant::now();
         let request_url = format!("{}/api/generate", self.url);
         let request_body = GenerateRequest {
             model,
@@ -59,41 +60,71 @@ impl LlmClient {
             },
         };
 
-        let res = self
+        match self
             .client
             .post(&request_url)
             .json(&request_body)
             .send()
-            .await?;
-
-        let response_body = res.json::<GenerateResponse>().await?;
-        Ok(response_body.response)
+            .await
+        {
+            Ok(res) => {
+                let response_body = res.json::<GenerateResponse>().await?;
+                let duration = start_time.elapsed();
+                log::info!("LLM generation completed in {}ms", duration.as_millis());
+                Ok(response_body.response)
+            }
+            Err(e) => {
+                let duration = start_time.elapsed();
+                log::error!("LLM generation failed after {}ms: {}", duration.as_millis(), e);
+                Err(e)
+            }
+        }
     }
 
     pub async fn generate_embeddings(&self, model: &str, prompt: &str) -> Result<Vec<f64>, reqwest::Error> {
+        let start_time = std::time::Instant::now();
         let request_url = format!("{}/api/embeddings", self.url);
         let request_body = EmbeddingRequest {
             model,
             prompt,
         };
 
-        let res = self
+        match self
             .client
             .post(&request_url)
             .json(&request_body)
             .send()
-            .await?;
-
-        let response_body = res.json::<EmbeddingResponse>().await?;
-        Ok(response_body.embedding)
+            .await
+        {
+            Ok(res) => {
+                let response_body = res.json::<EmbeddingResponse>().await?;
+                let duration = start_time.elapsed();
+                log::info!("Embedding generation completed in {}ms", duration.as_millis());
+                Ok(response_body.embedding)
+            }
+            Err(e) => {
+                let duration = start_time.elapsed();
+                log::error!("Embedding generation failed after {}ms: {}", duration.as_millis(), e);
+                Err(e)
+            }
+        }
     }
 
     pub async fn check_health(&self) -> Result<bool, reqwest::Error> {
+        let start_time = std::time::Instant::now();
         let request_url = format!("{}/api/tags", self.url);
 
         match self.client.get(&request_url).send().await {
-            Ok(response) => Ok(response.status().is_success()),
-            Err(_) => Ok(false),
+            Ok(response) => {
+                let duration = start_time.elapsed();
+                log::info!("Ollama health check completed in {}ms", duration.as_millis());
+                Ok(response.status().is_success())
+            }
+            Err(e) => {
+                let duration = start_time.elapsed();
+                log::info!("Ollama health check failed after {}ms: {}", duration.as_millis(), e);
+                Ok(false)
+            }
         }
     }
 }
