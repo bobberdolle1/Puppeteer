@@ -86,6 +86,9 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
 
     log::debug!("Prompt for chat {}: {}", chat_id, prompt);
 
+    // --- Show typing indicator ---
+    let _ = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing).await;
+
     // --- Generate Response ---
     let start_time = std::time::Instant::now();
     match state.llm_client.generate(&state.config.ollama_chat_model, &prompt, state.config.temperature, state.config.max_tokens).await {
