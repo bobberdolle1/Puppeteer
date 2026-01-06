@@ -239,6 +239,16 @@ pub async fn handle_callback_query(bot: Bot, q: CallbackQuery, state: AppState) 
         "help_rag" => edit_help_rag(&bot, chat_id, msg_id).await?,
         "help_commands" => edit_help_commands(&bot, chat_id, msg_id).await?,
         
+        // === PAUSE/RESUME ===
+        "toggle_pause" => {
+            let is_paused = state.is_paused();
+            state.set_paused(!is_paused);
+            let status = if !is_paused { "⏸️ Бот приостановлен" } else { "▶️ Бот возобновлён" };
+            bot.answer_callback_query(q.id.clone()).text(status).await?;
+            edit_main_menu_with_pause(&bot, chat_id, msg_id, &state).await?;
+            return Ok(());
+        }
+        
         _ => {
             bot.answer_callback_query(q.id.clone()).text("❌ Неизвестная команда").await?;
         }
@@ -268,6 +278,38 @@ async fn edit_main_menu(bot: &Bot, chat_id: ChatId, msg_id: MessageId) -> Respon
     ]);
     
     bot.edit_message_text(chat_id, msg_id, "🤖 <b>PersonaForge</b>\n\nВыберите раздел:")
+        .parse_mode(ParseMode::Html)
+        .reply_markup(kb)
+        .await?;
+    Ok(())
+}
+
+async fn edit_main_menu_with_pause(bot: &Bot, chat_id: ChatId, msg_id: MessageId, state: &AppState) -> ResponseResult<()> {
+    let is_paused = state.is_paused();
+    let pause_btn = if is_paused {
+        InlineKeyboardButton::callback("▶️ Возобновить", "toggle_pause")
+    } else {
+        InlineKeyboardButton::callback("⏸️ Пауза", "toggle_pause")
+    };
+    
+    let kb = InlineKeyboardMarkup::new(vec![
+        vec![
+            InlineKeyboardButton::callback("🎭 Персоны", "personas"),
+            InlineKeyboardButton::callback("⚙️ Конфиг", "config"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("💬 Чат", "chat"),
+            InlineKeyboardButton::callback("🛠️ Инструменты", "tools"),
+        ],
+        vec![
+            InlineKeyboardButton::callback("📊 Статус", "status"),
+            InlineKeyboardButton::callback("❓ Помощь", "help"),
+        ],
+        vec![pause_btn],
+    ]);
+    
+    let status = if is_paused { "⏸️ <i>Бот на паузе</i>\n\n" } else { "" };
+    bot.edit_message_text(chat_id, msg_id, format!("🤖 <b>PersonaForge</b>\n\n{}Выберите раздел:", status))
         .parse_mode(ParseMode::Html)
         .reply_markup(kb)
         .await?;
@@ -983,7 +1025,14 @@ async fn edit_security_menu(bot: &Bot, chat_id: ChatId, msg_id: MessageId, _stat
 
 // === PUBLIC MENU SENDER (for /menu command) ===
 
-pub async fn send_main_menu_new(bot: &Bot, chat_id: ChatId) -> ResponseResult<()> {
+pub async fn send_main_menu_new(bot: &Bot, chat_id: ChatId, state: &AppState) -> ResponseResult<()> {
+    let is_paused = state.is_paused();
+    let pause_btn = if is_paused {
+        InlineKeyboardButton::callback("▶️ Возобновить", "toggle_pause")
+    } else {
+        InlineKeyboardButton::callback("⏸️ Пауза", "toggle_pause")
+    };
+    
     let kb = InlineKeyboardMarkup::new(vec![
         vec![
             InlineKeyboardButton::callback("🎭 Персоны", "personas"),
@@ -997,9 +1046,11 @@ pub async fn send_main_menu_new(bot: &Bot, chat_id: ChatId) -> ResponseResult<()
             InlineKeyboardButton::callback("📊 Статус", "status"),
             InlineKeyboardButton::callback("❓ Помощь", "help"),
         ],
+        vec![pause_btn],
     ]);
     
-    bot.send_message(chat_id, "🤖 <b>PersonaForge</b>\n\nВыберите раздел:")
+    let status = if is_paused { "⏸️ <i>Бот на паузе</i>\n\n" } else { "" };
+    bot.send_message(chat_id, format!("🤖 <b>PersonaForge</b>\n\n{}Выберите раздел:", status))
         .parse_mode(ParseMode::Html)
         .reply_markup(kb)
         .await?;

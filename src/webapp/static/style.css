@@ -334,3 +334,30 @@ h3 {
     padding: 40px;
     color: var(--tg-theme-hint-color);
 }
+
+/* Pause Button */
+.pause-container {
+    margin-bottom: 16px;
+}
+
+.btn-pause {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 24px;
+    font-size: 18px;
+    font-weight: 600;
+    background: var(--tg-theme-button-color);
+    color: var(--tg-theme-button-text-color);
+    border-radius: 12px;
+    transition: all 0.2s;
+}
+
+.btn-pause.paused {
+    background: #34c759;
+}
+
+.btn-pause:active {
+    transform: scale(0.98);
+}

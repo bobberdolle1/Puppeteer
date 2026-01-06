@@ -73,7 +73,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/models", get(api::list_models))
         .route("/stats", get(api::get_chat_stats))
         .route("/broadcast", post(api::broadcast))
-        .route("/config", get(api::get_config).put(api::update_config));
+        .route("/config", get(api::get_config).put(api::update_config))
+        // Pause/Resume
+        .route("/pause", get(api::get_pause_status).post(api::toggle_pause));
 
     Router::new()
         .nest("/api", api_routes)

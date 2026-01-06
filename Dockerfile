@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM rust:1.83 AS chef
+FROM rust:1.85 AS chef
 WORKDIR /app
 RUN cargo install cargo-chef
 

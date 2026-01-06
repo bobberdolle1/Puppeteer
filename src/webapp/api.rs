@@ -302,6 +302,7 @@ pub struct SystemStatus {
     pub vision_enabled: bool,
     pub voice_enabled: bool,
     pub web_search_enabled: bool,
+    pub paused: bool,
 }
 
 pub async fn get_status(
@@ -339,6 +340,7 @@ pub async fn get_status(
         vision_enabled: state.config.vision_enabled,
         voice_enabled: state.config.voice_enabled,
         web_search_enabled: state.config.web_search_enabled,
+        paused: state.is_paused(),
     })))
 }
 
@@ -699,4 +701,33 @@ pub async fn unblock_user(
     );
 
     Ok(Json(ApiResponse::ok(())))
+}
+
+// --- Pause/Resume ---
+
+#[derive(Serialize)]
+pub struct PauseResponse {
+    pub paused: bool,
+}
+
+pub async fn get_pause_status(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<PauseResponse>>, StatusCode> {
+    extract_user(&headers, &state)?;
+    Ok(Json(ApiResponse::ok(PauseResponse { paused: state.is_paused() })))
+}
+
+pub async fn toggle_pause(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<ApiResponse<PauseResponse>>, StatusCode> {
+    extract_user(&headers, &state)?;
+    
+    let new_state = !state.is_paused();
+    state.set_paused(new_state);
+    
+    log::info!("Bot {} via API", if new_state { "paused" } else { "resumed" });
+    
+    Ok(Json(ApiResponse::ok(PauseResponse { paused: new_state })))
 }

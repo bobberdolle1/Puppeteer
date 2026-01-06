@@ -16,6 +16,23 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         return crate::bot::handlers::commands::handle_command(bot, msg, state).await;
     }
 
+    // Check if bot is paused
+    if state.is_paused() {
+        return Ok(());
+    }
+
+    // Lazy load bot info if not available
+    if !state.has_bot_info().await {
+        if let Ok(me) = bot.get_me().await {
+            let bot_info = crate::state::BotInfo {
+                id: me.id.0,
+                username: me.username.clone().unwrap_or_default(),
+                first_name: me.first_name.clone(),
+            };
+            state.set_bot_info(bot_info).await;
+        }
+    }
+
     // --- Save incoming message and generate embedding ---
     save_and_embed_message(&state, &msg).await;
 
@@ -49,7 +66,24 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     }
 
     // Check reply mode (mention/command vs all messages)
-    let should_reply = if chat_settings.reply_mode == "all_messages" {
+    // In private chats, always reply
+    // If someone replies to bot's message, always reply
+    // If someone mentions bot by name, always reply
+    let is_private = msg.chat.is_private();
+    let is_reply_to_bot = msg.reply_to_message().map(|reply| {
+        reply.from.as_ref().map(|u| u.is_bot).unwrap_or(false)
+    }).unwrap_or(false);
+    
+    // Check if bot is mentioned by name or username
+    let bot_name = state.get_bot_name().await;
+    let bot_username = state.get_bot_username().await;
+    let text_lower = text.to_lowercase();
+    let bot_name_lower = bot_name.to_lowercase();
+    
+    let is_mentioned_by_name = text_lower.contains(&bot_name_lower) ||
+        bot_username.as_ref().map(|u| text.contains(&format!("@{}", u))).unwrap_or(false);
+    
+    let should_reply = if is_private || is_reply_to_bot || is_mentioned_by_name || chat_settings.reply_mode == "all_messages" {
         true
     } else {
         // For "mention_only" mode, check if bot is mentioned
@@ -83,12 +117,22 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
 
     // Use context depth from chat settings
     let short_term_history = get_and_update_history_with_depth(state.dialogues.clone(), &msg, chat_settings.context_depth as usize).await;
-    let prompt = build_prompt(persona_prompt, long_term_memories, short_term_history);
+    
+    // Get bot name for prompt
+    let bot_name = state.get_bot_name().await;
+    let prompt = build_prompt(persona_prompt, long_term_memories, short_term_history, &bot_name);
 
     log::debug!("Prompt for chat {}: {}", chat_id, prompt);
 
+    // Get thread_id for forum topics support
+    let thread_id = msg.thread_id;
+
     // --- Show typing indicator ---
-    let _ = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing).await;
+    let mut typing_action = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
+    if let Some(tid) = thread_id {
+        typing_action = typing_action.message_thread_id(tid);
+    }
+    let _ = typing_action.await;
 
     // --- Generate Response ---
     let start_time = std::time::Instant::now();
@@ -103,16 +147,26 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
             
             // Try to send with MarkdownV2, fallback to plain text if parsing fails
             let escaped = escape_markdown_v2(&processed_response);
-            let send_result = bot.send_message(chat_id, &escaped)
-                .parse_mode(ParseMode::MarkdownV2)
-                .await;
+            
+            // Build send message request with thread_id support
+            let mut send_req = bot.send_message(chat_id, &escaped)
+                .parse_mode(ParseMode::MarkdownV2);
+            if let Some(tid) = thread_id {
+                send_req = send_req.message_thread_id(tid);
+            }
+            
+            let send_result = send_req.await;
             
             let sent_msg = match send_result {
                 Ok(msg) => Some(msg),
                 Err(_) => {
                     // Markdown parsing failed, try plain text
                     log::debug!("Markdown parsing failed, sending as plain text");
-                    bot.send_message(chat_id, &processed_response).await.ok()
+                    let mut plain_req = bot.send_message(chat_id, &processed_response);
+                    if let Some(tid) = thread_id {
+                        plain_req = plain_req.message_thread_id(tid);
+                    }
+                    plain_req.await.ok()
                 }
             };
             
@@ -124,7 +178,11 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         Err(e) => {
             let response_time = start_time.elapsed().as_millis();
             log::error!("Failed to get response from LLM after {}ms: {}", response_time, e);
-            bot.send_message(chat_id, "Не удалось сгенерировать ответ.").await?;
+            let mut err_req = bot.send_message(chat_id, "Не удалось сгенерировать ответ.");
+            if let Some(tid) = thread_id {
+                err_req = err_req.message_thread_id(tid);
+            }
+            err_req.await?;
         }
     }
 
@@ -218,8 +276,10 @@ fn build_prompt(
     persona_prompt: String,
     long_term_memories: Vec<String>,
     short_term_history: Vec<Message>,
+    bot_name: &str,
 ) -> String {
-    let mut prompt = format!("System: {}\n\n", persona_prompt);
+    // Add bot name to system prompt
+    let mut prompt = format!("System: Your name is {}. {}\n\n", bot_name, persona_prompt);
 
     if !long_term_memories.is_empty() {
         prompt.push_str("### Relevant Past Memories (for context):\n");
@@ -230,11 +290,17 @@ fn build_prompt(
     }
 
     for msg in short_term_history {
-        let sender_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "Bot".to_string());
+        let sender_name = msg.from.as_ref().map(|u| {
+            if u.is_bot {
+                bot_name.to_string()
+            } else {
+                u.first_name.clone()
+            }
+        }).unwrap_or_else(|| bot_name.to_string());
         let text = msg.text().unwrap_or("");
         prompt.push_str(&format!("{}: {}\n", sender_name, text));
     }
-    prompt.push_str("Bot: ");
+    prompt.push_str(&format!("{}: ", bot_name));
     prompt
 }
 

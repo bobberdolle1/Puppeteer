@@ -15,7 +15,7 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
     // /start доступен всем
     let cmd = text.split_whitespace().next().unwrap_or("");
     if cmd == "/start" {
-        return handle_start(bot, msg).await;
+        return handle_start(bot, msg, &state).await;
     }
 
     // Остальные команды только для владельца
@@ -44,7 +44,7 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
         "/reply_to_mention" => handle_reply_to_mention(bot, msg, &state).await,
         "/set_cooldown" => handle_set_cooldown(bot, msg, &state).await,
         "/menu" => {
-            crate::bot::handlers::callbacks::send_main_menu_new(&bot, chat_id).await?;
+            crate::bot::handlers::callbacks::send_main_menu_new(&bot, chat_id, &state).await?;
             Ok(())
         }
         "/settings" => send_settings_menu(bot, chat_id).await,
@@ -749,7 +749,7 @@ async fn handle_security_status(bot: Bot, msg: Message, state: &AppState) -> Res
     Ok(())
 }
 
-async fn handle_start(bot: Bot, msg: Message) -> ResponseResult<()> {
+async fn handle_start(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let user_name = msg.from.as_ref()
         .map(|u| u.first_name.as_str())
@@ -757,17 +757,12 @@ async fn handle_start(bot: Bot, msg: Message) -> ResponseResult<()> {
 
     let welcome = format!(
         "👋 <b>Привет, {}!</b>\n\n\
-        Я <b>PersonaForge</b> — AI-бот с кастомными персонами и долгосрочной памятью.\n\n\
+        Я <b>PersonaForge</b> — AI-бот с кастомными персонами.\n\n\
         🎭 <b>Что умею:</b>\n\
-        • Общаться в разных стилях (персоны)\n\
-        • Помнить контекст разговора (RAG)\n\
-        • Искать актуальную инфу в интернете\n\
+        • Общаться в разных стилях\n\
+        • Помнить контекст разговора\n\
         • Распознавать голосовые сообщения\n\
         • Анализировать изображения\n\n\
-        📝 <b>Команды:</b>\n\
-        /menu — главное меню\n\
-        /help — справка\n\
-        /status — статус системы\n\n\
         Просто напиши мне что-нибудь! 💬",
         user_name
     );

@@ -21,6 +21,15 @@
         <!-- Status Tab -->
         <section id="status" class="tab active">
             <h2>Статус системы</h2>
+            
+            <!-- Pause Button -->
+            <div class="pause-container">
+                <button id="pause-btn" class="btn btn-pause" onclick="togglePause()">
+                    <span id="pause-icon">⏸️</span>
+                    <span id="pause-text">Пауза</span>
+                </button>
+            </div>
+            
             <div class="status-grid" id="status-grid">
                 <div class="status-card">
                     <span class="status-icon" id="ollama-status">⏳</span>

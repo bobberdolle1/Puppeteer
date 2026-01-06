@@ -6,6 +6,7 @@ use crate::web::search::WebSearchClient;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use teloxide::prelude::*;
 use tokio::sync::{Mutex, Semaphore};
@@ -48,6 +49,14 @@ pub struct QueueStats {
     pub avg_response_time_ms: u64,
 }
 
+/// Bot info from Telegram API
+#[derive(Clone, Debug)]
+pub struct BotInfo {
+    pub id: u64,
+    pub username: String,
+    pub first_name: String,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
@@ -63,6 +72,8 @@ pub struct AppState {
     pub queue_stats: Arc<Mutex<QueueStats>>,
     pub keyword_triggers: Arc<Mutex<HashMap<ChatId, Vec<String>>>>,
     pub security_tracker: Arc<SecurityTracker>,
+    pub paused: Arc<AtomicBool>,
+    pub bot_info: Arc<Mutex<Option<BotInfo>>>,
 }
 
 impl AppState {
@@ -92,7 +103,45 @@ impl AppState {
             queue_stats: Arc::new(Mutex::new(QueueStats::default())),
             keyword_triggers: Arc::new(Mutex::new(HashMap::new())),
             security_tracker: Arc::new(SecurityTracker::new(security_config)),
+            paused: Arc::new(AtomicBool::new(false)),
+            bot_info: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Set bot info from Telegram API
+    pub async fn set_bot_info(&self, info: BotInfo) {
+        let mut bot_info = self.bot_info.lock().await;
+        *bot_info = Some(info);
+    }
+
+    /// Get bot's first name (display name)
+    pub async fn get_bot_name(&self) -> String {
+        let bot_info = self.bot_info.lock().await;
+        bot_info.as_ref()
+            .map(|i| i.first_name.clone())
+            .unwrap_or_else(|| self.config.bot_name.clone())
+    }
+
+    /// Get bot's username
+    pub async fn get_bot_username(&self) -> Option<String> {
+        let bot_info = self.bot_info.lock().await;
+        bot_info.as_ref().map(|i| i.username.clone())
+    }
+
+    /// Check if bot info is loaded
+    pub async fn has_bot_info(&self) -> bool {
+        let bot_info = self.bot_info.lock().await;
+        bot_info.is_some()
+    }
+
+    /// Check if bot is paused
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::SeqCst)
+    }
+
+    /// Set bot paused state
+    pub fn set_paused(&self, paused: bool) {
+        self.paused.store(paused, Ordering::SeqCst);
     }
 
     /// Get wizard state for a chat

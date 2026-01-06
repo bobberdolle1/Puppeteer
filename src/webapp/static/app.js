@@ -60,6 +60,9 @@ async function loadStatus() {
     try {
         const status = await api.get('/status');
         
+        // Update pause button
+        updatePauseButton(status.paused);
+        
         document.getElementById('ollama-status').textContent = status.ollama_online ? '🟢' : '🔴';
         document.getElementById('db-status').textContent = status.db_online ? '🟢' : '🔴';
         document.getElementById('active-persona').textContent = status.active_persona || 'Не выбрана';
@@ -80,6 +83,33 @@ async function loadStatus() {
         document.getElementById('features-list').textContent = features.join(' • ') || 'Нет дополнительных функций';
     } catch (e) {
         console.error('Failed to load status:', e);
+    }
+}
+
+// Pause functionality
+function updatePauseButton(isPaused) {
+    const btn = document.getElementById('pause-btn');
+    const icon = document.getElementById('pause-icon');
+    const text = document.getElementById('pause-text');
+    
+    if (isPaused) {
+        btn.classList.add('paused');
+        icon.textContent = '▶️';
+        text.textContent = 'Возобновить';
+    } else {
+        btn.classList.remove('paused');
+        icon.textContent = '⏸️';
+        text.textContent = 'Пауза';
+    }
+}
+
+async function togglePause() {
+    try {
+        const result = await api.post('/pause');
+        updatePauseButton(result.paused);
+        tg.showAlert(result.paused ? 'Бот приостановлен' : 'Бот возобновлён');
+    } catch (e) {
+        console.error('Failed to toggle pause:', e);
     }
 }
 

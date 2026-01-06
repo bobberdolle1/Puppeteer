@@ -7,21 +7,23 @@ services:
     env_file:
       - .env
     environment:
-      # Override database path for container
-      - DATABASE_URL=sqlite:/app/data/persona_forge.db
+      # Override database path for container (mode=rwc creates file if not exists)
+      - DATABASE_URL=sqlite:/app/data/persona_forge.db?mode=rwc
       # Webapp binds to all interfaces in container
       - WEBAPP_HOST=0.0.0.0
+      # Enable logging
+      - RUST_LOG=info
+      # Override Ollama URL to use host.docker.internal (macOS/Windows)
+      - OLLAMA_URL=http://host.docker.internal:11434
     ports:
-      # WebApp Mini App
       - "${WEBAPP_PORT:-8080}:8080"
     volumes:
-      # Persist database
       - ./data:/app/data
-      # Mount static files for hot reload (optional, for dev)
-      # - ./src/webapp/static:/app/static:ro
     extra_hosts:
-      # Connect to Ollama on host machine
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/status"]
@@ -29,34 +31,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
-  # Optional: Run Ollama in Docker too
-  # ollama:
-  #   image: ollama/ollama
-  #   container_name: persona_forge_ollama
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   ports:
-  #     - "11434:11434"
-  #   restart: unless-stopped
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: all
-  #             capabilities: [gpu]
-
-  # Optional: Cloudflared tunnel for HTTPS
-  # tunnel:
-  #   image: cloudflare/cloudflared:latest
-  #   container_name: persona_forge_tunnel
-  #   command: tunnel --no-autoupdate run
-  #   environment:
-  #     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - bot
 
 volumes:
   ollama_data:

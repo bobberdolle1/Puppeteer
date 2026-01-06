@@ -52,9 +52,44 @@ async fn main() {
     }
     log::info!("✅ Migrations applied");
 
+    // Sync env config to runtime_config (env takes precedence)
+    let _ = persona_forge::db::set_config(&db_pool, "ollama_chat_model", &config.ollama_chat_model).await;
+    let _ = persona_forge::db::set_config(&db_pool, "ollama_embedding_model", &config.ollama_embedding_model).await;
+    let _ = persona_forge::db::set_config(&db_pool, "ollama_vision_model", &config.ollama_vision_model).await;
+    let _ = persona_forge::db::set_config(&db_pool, "temperature", &config.temperature.to_string()).await;
+    let _ = persona_forge::db::set_config(&db_pool, "max_tokens", &config.max_tokens.to_string()).await;
+    let _ = persona_forge::db::set_config(&db_pool, "vision_enabled", &config.vision_enabled.to_string()).await;
+    let _ = persona_forge::db::set_config(&db_pool, "voice_enabled", &config.voice_enabled.to_string()).await;
+    let _ = persona_forge::db::set_config(&db_pool, "web_search_enabled", &config.web_search_enabled.to_string()).await;
+    log::info!("✅ Runtime config synced from env");
+
     let webapp_port = config.webapp_port;
     let bot = Bot::new(config.teloxide_token.clone());
     let app_state = AppState::new(config, db_pool);
+
+    // Get bot info from Telegram API (with retry)
+    for attempt in 1..=3 {
+        match bot.get_me().await {
+            Ok(me) => {
+                let bot_info = persona_forge::state::BotInfo {
+                    id: me.id.0,
+                    username: me.username.clone().unwrap_or_default(),
+                    first_name: me.first_name.clone(),
+                };
+                log::info!("✅ Bot info: {} (@{})", bot_info.first_name, bot_info.username);
+                app_state.set_bot_info(bot_info).await;
+                break;
+            }
+            Err(e) => {
+                if attempt < 3 {
+                    log::warn!("⚠️ Failed to get bot info (attempt {}): {}, retrying...", attempt, e);
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                } else {
+                    log::warn!("⚠️ Failed to get bot info after 3 attempts: {}", e);
+                }
+            }
+        }
+    }
 
     // Start webapp server in background
     let webapp_state = app_state.clone();
