@@ -126,20 +126,62 @@ async function loadPersonas() {
             return;
         }
         
-        list.innerHTML = personas.map(p => `
+        list.innerHTML = personas.map(p => {
+            const displayName = p.display_name ? ` (${escapeHtml(p.display_name)})` : '';
+            const triggers = p.triggers ? `🎯 ${escapeHtml(p.triggers)}` : '';
+            return `
             <div class="list-item">
                 <div class="list-item-header">
-                    <span class="list-item-title">${escapeHtml(p.name)}</span>
+                    <span class="list-item-title">${escapeHtml(p.name)}${displayName}</span>
                     <span class="badge ${p.is_active ? '' : 'badge-inactive'}">${p.is_active ? 'Активна' : 'ID: ' + p.id}</span>
                 </div>
                 <div class="list-item-subtitle">${escapeHtml(p.prompt.substring(0, 100))}${p.prompt.length > 100 ? '...' : ''}</div>
+                ${triggers ? `<div class="list-item-subtitle" style="margin-top: 4px;">${triggers}</div>` : ''}
                 <div class="list-item-actions">
                     ${!p.is_active ? `<button class="btn btn-small btn-primary" onclick="activatePersona(${p.id})">Активировать</button>` : ''}
-                    <button class="btn btn-small btn-secondary" onclick="editPersona(${p.id}, '${escapeJs(p.name)}', '${escapeJs(p.prompt)}')">Изменить</button>
+                    <button class="btn btn-small btn-secondary" onclick="editPersona(${p.id})">Изменить</button>
                     <button class="btn btn-small btn-danger" onclick="deletePersona(${p.id}, '${escapeJs(p.name)}')">Удалить</button>
                 </div>
             </div>
-        `).join('');
+        `}).join('');
+    } catch (e) {
+        list.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+    }
+}
+
+// Store personas data for editing
+let personasCache = [];
+
+async function loadPersonas() {
+    const list = document.getElementById('personas-list');
+    list.innerHTML = '<div class="loading">Загрузка...</div>';
+    
+    try {
+        personasCache = await api.get('/personas');
+        
+        if (personasCache.length === 0) {
+            list.innerHTML = '<div class="empty">Нет персон</div>';
+            return;
+        }
+        
+        list.innerHTML = personasCache.map(p => {
+            const displayName = p.display_name ? ` (${escapeHtml(p.display_name)})` : '';
+            const triggers = p.triggers ? `🎯 ${escapeHtml(p.triggers)}` : '';
+            return `
+            <div class="list-item">
+                <div class="list-item-header">
+                    <span class="list-item-title">${escapeHtml(p.name)}${displayName}</span>
+                    <span class="badge ${p.is_active ? '' : 'badge-inactive'}">${p.is_active ? 'Активна' : 'ID: ' + p.id}</span>
+                </div>
+                <div class="list-item-subtitle">${escapeHtml(p.prompt.substring(0, 100))}${p.prompt.length > 100 ? '...' : ''}</div>
+                ${triggers ? `<div class="list-item-subtitle" style="margin-top: 4px;">${triggers}</div>` : ''}
+                <div class="list-item-actions">
+                    ${!p.is_active ? `<button class="btn btn-small btn-primary" onclick="activatePersona(${p.id})">Активировать</button>` : ''}
+                    <button class="btn btn-small btn-secondary" onclick="editPersona(${p.id})">Изменить</button>
+                    <button class="btn btn-small btn-danger" onclick="deletePersona(${p.id}, '${escapeJs(p.name)}')">Удалить</button>
+                </div>
+            </div>
+        `}).join('');
     } catch (e) {
         list.innerHTML = '<div class="empty">Ошибка загрузки</div>';
     }
@@ -152,6 +194,15 @@ function showCreatePersona() {
             <input type="text" id="persona-name" placeholder="Например: Джарвис">
         </div>
         <div class="form-group">
+            <label>Имя для отклика (опционально)</label>
+            <input type="text" id="persona-display-name" placeholder="Оставьте пустым для имени бота">
+        </div>
+        <div class="form-group">
+            <label>Триггеры (опционально)</label>
+            <input type="text" id="persona-triggers" placeholder="помоги, подскажи, эй">
+            <small style="color: var(--tg-theme-hint-color);">Ключевые слова через запятую</small>
+        </div>
+        <div class="form-group">
             <label>Промпт (системное сообщение)</label>
             <textarea id="persona-prompt" placeholder="Опишите характер и поведение персоны..."></textarea>
         </div>
@@ -161,30 +212,44 @@ function showCreatePersona() {
 
 async function createPersona() {
     const name = document.getElementById('persona-name').value.trim();
+    const displayName = document.getElementById('persona-display-name').value.trim() || null;
+    const triggers = document.getElementById('persona-triggers').value.trim() || null;
     const prompt = document.getElementById('persona-prompt').value.trim();
     
     if (!name || !prompt) {
-        tg.showAlert('Заполните все поля');
+        tg.showAlert('Заполните название и промпт');
         return;
     }
     
     try {
-        await api.post('/personas', { name, prompt });
+        await api.post('/personas', { name, prompt, display_name: displayName, triggers });
         closeModal();
         await loadPersonas();
         tg.showAlert('Персона создана');
     } catch (e) {}
 }
 
-function editPersona(id, name, prompt) {
+function editPersona(id) {
+    const p = personasCache.find(x => x.id === id);
+    if (!p) return;
+    
     showModal('Изменить персону', `
         <div class="form-group">
             <label>Название</label>
-            <input type="text" id="persona-name" value="${escapeHtml(name)}">
+            <input type="text" id="persona-name" value="${escapeHtml(p.name)}">
+        </div>
+        <div class="form-group">
+            <label>Имя для отклика</label>
+            <input type="text" id="persona-display-name" value="${escapeHtml(p.display_name || '')}" placeholder="Оставьте пустым для имени бота">
+        </div>
+        <div class="form-group">
+            <label>Триггеры</label>
+            <input type="text" id="persona-triggers" value="${escapeHtml(p.triggers || '')}" placeholder="помоги, подскажи, эй">
+            <small style="color: var(--tg-theme-hint-color);">Ключевые слова через запятую</small>
         </div>
         <div class="form-group">
             <label>Промпт</label>
-            <textarea id="persona-prompt">${escapeHtml(prompt)}</textarea>
+            <textarea id="persona-prompt">${escapeHtml(p.prompt)}</textarea>
         </div>
         <button class="btn btn-primary" onclick="updatePersona(${id})">Сохранить</button>
     `);
@@ -192,17 +257,20 @@ function editPersona(id, name, prompt) {
 
 async function updatePersona(id) {
     const name = document.getElementById('persona-name').value.trim();
+    const displayName = document.getElementById('persona-display-name').value.trim() || null;
+    const triggers = document.getElementById('persona-triggers').value.trim() || null;
     const prompt = document.getElementById('persona-prompt').value.trim();
     
     if (!name || !prompt) {
-        tg.showAlert('Заполните все поля');
+        tg.showAlert('Заполните название и промпт');
         return;
     }
     
     try {
-        await api.put(`/personas/${id}`, { name, prompt });
+        await api.put(`/personas/${id}`, { name, prompt, display_name: displayName, triggers });
         closeModal();
         await loadPersonas();
+        tg.showAlert('Персона обновлена');
     } catch (e) {}
 }
 

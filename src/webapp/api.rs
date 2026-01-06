@@ -54,18 +54,24 @@ pub struct PersonaResponse {
     pub name: String,
     pub prompt: String,
     pub is_active: bool,
+    pub display_name: Option<String>,
+    pub triggers: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct CreatePersonaRequest {
     pub name: String,
     pub prompt: String,
+    pub display_name: Option<String>,
+    pub triggers: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct UpdatePersonaRequest {
     pub name: String,
     pub prompt: String,
+    pub display_name: Option<String>,
+    pub triggers: Option<String>,
 }
 
 // --- Persona endpoints ---
@@ -85,6 +91,8 @@ pub async fn list_personas(
                     name: p.name,
                     prompt: p.prompt,
                     is_active: p.is_active,
+                    display_name: p.display_name,
+                    triggers: p.triggers,
                 })
                 .collect();
             Ok(Json(ApiResponse::ok(data)))
@@ -107,12 +115,20 @@ pub async fn create_persona(
         return Ok(Json(ApiResponse::err("Name and prompt required")));
     }
 
-    match db::create_persona(&state.db_pool, &req.name, &req.prompt).await {
+    match db::create_persona_full(
+        &state.db_pool, 
+        &req.name, 
+        &req.prompt,
+        req.display_name.as_deref(),
+        req.triggers.as_deref(),
+    ).await {
         Ok(id) => Ok(Json(ApiResponse::ok(PersonaResponse {
             id,
             name: req.name,
             prompt: req.prompt,
             is_active: false,
+            display_name: req.display_name,
+            triggers: req.triggers,
         }))),
         Err(e) => {
             log::error!("Failed to create persona: {}", e);
@@ -129,7 +145,14 @@ pub async fn update_persona(
 ) -> Result<Json<ApiResponse<()>>, StatusCode> {
     extract_user(&headers, &state)?;
 
-    match db::update_persona(&state.db_pool, id, &req.name, &req.prompt).await {
+    match db::update_persona_full(
+        &state.db_pool, 
+        id, 
+        &req.name, 
+        &req.prompt,
+        req.display_name.as_deref(),
+        req.triggers.as_deref(),
+    ).await {
         Ok(()) => Ok(Json(ApiResponse::ok(()))),
         Err(e) => {
             log::error!("Failed to update persona: {}", e);
