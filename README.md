@@ -1,13 +1,25 @@
+<div align="center">
+
 # 🤖 PersonaForge
 
 **Telegram-бот с кастомными AI-персонами, долгосрочной памятью и мультимодальными возможностями.**
 
 Создавай уникальные AI-личности, общайся голосом, анализируй изображения — всё локально через Ollama.
 
+[![CI](https://github.com/bobberdolle1/PersonaForge/actions/workflows/ci.yml/badge.svg)](https://github.com/bobberdolle1/PersonaForge/actions/workflows/ci.yml)
+[![Release](https://github.com/bobberdolle1/PersonaForge/actions/workflows/release.yml/badge.svg)](https://github.com/bobberdolle1/PersonaForge/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub release](https://img.shields.io/github/v/release/bobberdolle1/PersonaForge?include_prereleases)](https://github.com/bobberdolle1/PersonaForge/releases)
+
 ![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)
 ![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=flat&logo=telegram&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-blue)
 ![SQLite](https://img.shields.io/badge/SQLite-07405E?style=flat&logo=sqlite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
+
+[📖 Documentation](https://bobberdolle1.github.io/PersonaForge) · [🐛 Report Bug](https://github.com/bobberdolle1/PersonaForge/issues/new?template=bug_report.md) · [✨ Request Feature](https://github.com/bobberdolle1/PersonaForge/issues/new?template=feature_request.md)
+
+</div>
 
 ---
 
@@ -94,7 +106,7 @@
 
 ```bash
 # Клонируй репозиторий
-git clone https://github.com/yourusername/persona-forge.git
+git clone https://github.com/bobberdolle1/PersonaForge.git
 cd persona-forge
 
 # Скопируй конфиг
@@ -360,7 +372,7 @@ PersonaForge использует продвинутую систему логи
 ╔══════════════════════════════════════════════════════════════╗
 ║   ██████╗ ███████╗██████╗ ███████╗ ██████╗ ███╗   ██╗ █████╗ ║
 ║   ...                                                        ║
-║              🤖 F O R G E   v0.1.0                           ║
+║              🤖 F O R G E   v1.0.0                           ║
 ╚══════════════════════════════════════════════════════════════╝
 
 ┌─ Configuration ─────────────────────────────────────────────┐
@@ -469,16 +481,36 @@ volumes:
 
 ## 📝 Лицензия
 
-MIT
+Этот проект лицензирован под [MIT License](LICENSE).
 
 ---
 
 ## 🤝 Contributing
 
-PR и issues приветствуются!
+Вклад в проект приветствуется! Пожалуйста, прочитайте [CONTRIBUTING.md](CONTRIBUTING.md) для деталей.
+
+- 🐛 [Сообщить о баге](https://github.com/bobberdolle1/PersonaForge/issues/new?template=bug_report.md)
+- ✨ [Предложить фичу](https://github.com/bobberdolle1/PersonaForge/issues/new?template=feature_request.md)
+- 💬 [Обсуждения](https://github.com/bobberdolle1/PersonaForge/discussions)
 
 ---
 
-<p align="center">
-  <b>Made with 🦀 Rust & ❤️</b>
-</p>
+## 🛡️ Security
+
+Нашли уязвимость? Пожалуйста, прочитайте [SECURITY.md](SECURITY.md) для ответственного раскрытия.
+
+---
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=bobberdolle1/PersonaForge&type=Date)](https://star-history.com/#bobberdolle1/PersonaForge&Date)
+
+---
+
+<div align="center">
+
+**[⬆ Наверх](#-personaforge)**
+
+Made with 🦀 Rust & ❤️
+
+</div>

@@ -1,0 +1,14 @@
+# Default owners for everything in the repo
+* @bobberdolle1
+
+# Rust source code
+/src/ @bobberdolle1
+
+# Database migrations
+/migrations/ @bobberdolle1
+
+# CI/CD configuration
+/.github/ @bobberdolle1
+
+# Documentation
+*.md @bobberdolle1

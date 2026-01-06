@@ -1,0 +1,40 @@
+title: "[Question] "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question? We're here to help! 🤔
+        
+  - type: textarea
+    id: question
+    attributes:
+      label: ❓ Your Question
+      description: What would you like to know?
+    validations:
+      required: true
+      
+  - type: textarea
+    id: context
+    attributes:
+      label: 📋 Context
+      description: Any relevant context or what you've already tried
+    validations:
+      required: false
+      
+  - type: dropdown
+    id: category
+    attributes:
+      label: 📁 Category
+      options:
+        - Setup / Installation
+        - Configuration
+        - Personas
+        - RAG / Memory
+        - Voice / Vision
+        - Mini App
+        - Security
+        - Other
+    validations:
+      required: true
