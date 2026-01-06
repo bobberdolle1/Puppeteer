@@ -726,25 +726,116 @@ async fn handle_wizard_input(bot: Bot, msg: Message, state: AppState, wizard_sta
                 bot.send_message(chat_id, "❌ Название не может быть пустым. Попробуйте ещё раз:").await?;
                 return Ok(());
             }
-            state.set_wizard_state(chat_id, WizardState::UpdatingPersonaPrompt { id, name: text.to_string() }).await;
+            
+            // Get current persona to show current values
+            let current = db::get_persona_by_id(&state.db_pool, id).await.ok().flatten();
+            let current_display = current.as_ref()
+                .and_then(|p| p.display_name.as_ref())
+                .map(|n| format!("<code>{}</code>", n))
+                .unwrap_or_else(|| "по умолчанию".to_string());
+            
+            state.set_wizard_state(chat_id, WizardState::UpdatingPersonaDisplayName { id, name: text.to_string() }).await;
+            
+            let bot_name = state.get_bot_name().await;
             bot.send_message(chat_id, format!(
-                "✅ Новое название: <b>{}</b>\n\nТеперь введите новый промпт:\n\n/cancel для отмены",
-                text
+                "✅ Новое название: <b>{}</b>\n\n\
+                Теперь укажите <b>имя</b>, на которое персона будет откликаться.\n\n\
+                💡 Текущее: {}\n\
+                💡 Имя бота: <code>{}</code>\n\
+                Отправьте <code>-</code> чтобы использовать имя бота по умолчанию.\n\n\
+                /cancel для отмены",
+                text, current_display, bot_name
             ))
             .parse_mode(ParseMode::Html)
             .await?;
         }
         
-        WizardState::UpdatingPersonaPrompt { id, name } => {
+        WizardState::UpdatingPersonaDisplayName { id, name } => {
+            let display_name = if text == "-" || text.is_empty() {
+                None
+            } else {
+                Some(text.to_string())
+            };
+            
+            // Get current triggers to show
+            let current = db::get_persona_by_id(&state.db_pool, id).await.ok().flatten();
+            let current_triggers = current.as_ref()
+                .and_then(|p| p.triggers.as_ref())
+                .map(|t| format!("<code>{}</code>", t))
+                .unwrap_or_else(|| "не заданы".to_string());
+            
+            state.set_wizard_state(chat_id, WizardState::UpdatingPersonaTriggers { id, name, display_name: display_name.clone() }).await;
+            
+            let display_info = display_name.as_ref()
+                .map(|n| format!("<code>{}</code>", n))
+                .unwrap_or_else(|| "имя бота по умолчанию".to_string());
+            
+            bot.send_message(chat_id, format!(
+                "✅ Имя персоны: {}\n\n\
+                Теперь укажите <b>триггеры</b> — ключевые слова через запятую.\n\n\
+                💡 Текущие: {}\n\
+                Отправьте <code>-</code> чтобы убрать триггеры.\n\n\
+                /cancel для отмены",
+                display_info, current_triggers
+            ))
+            .parse_mode(ParseMode::Html)
+            .await?;
+        }
+        
+        WizardState::UpdatingPersonaTriggers { id, name, display_name } => {
+            let triggers = if text == "-" || text.is_empty() {
+                None
+            } else {
+                let keywords: Vec<String> = text
+                    .split(',')
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if keywords.is_empty() { None } else { Some(keywords.join(",")) }
+            };
+            
+            state.set_wizard_state(chat_id, WizardState::UpdatingPersonaPrompt { id, name, display_name, triggers: triggers.clone() }).await;
+            
+            let triggers_info = triggers.as_ref()
+                .map(|t| format!("<code>{}</code>", t))
+                .unwrap_or_else(|| "не заданы".to_string());
+            
+            bot.send_message(chat_id, format!(
+                "✅ Триггеры: {}\n\n\
+                Теперь введите новый <b>системный промпт</b>.\n\n\
+                /cancel для отмены",
+                triggers_info
+            ))
+            .parse_mode(ParseMode::Html)
+            .await?;
+        }
+        
+        WizardState::UpdatingPersonaPrompt { id, name, display_name, triggers } => {
             if text.is_empty() {
                 bot.send_message(chat_id, "❌ Промпт не может быть пустым. Попробуйте ещё раз:").await?;
                 return Ok(());
             }
             
-            match db::update_persona(&state.db_pool, id, &name, text).await {
+            match db::update_persona_full(&state.db_pool, id, &name, text, display_name.as_deref(), triggers.as_deref()).await {
                 Ok(()) => {
                     state.clear_wizard_state(chat_id).await;
-                    bot.send_message(chat_id, format!("✅ Персона {} обновлена.", id)).await?;
+                    
+                    let display_info = display_name.as_ref()
+                        .map(|n| format!("Имя: {}", n))
+                        .unwrap_or_else(|| "Имя: по умолчанию".to_string());
+                    let triggers_info = triggers.as_ref()
+                        .map(|t| format!("Триггеры: {}", t))
+                        .unwrap_or_else(|| "Триггеры: не заданы".to_string());
+                    
+                    bot.send_message(chat_id, format!(
+                        "✅ Персона <b>{}</b> обновлена!\n\n\
+                        📋 ID: {}\n\
+                        👤 {}\n\
+                        🎯 {}",
+                        name, id, display_info, triggers_info
+                    ))
+                    .parse_mode(ParseMode::Html)
+                    .await?;
                 }
                 Err(e) => {
                     log::error!("Failed to update persona: {}", e);

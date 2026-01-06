@@ -42,8 +42,12 @@ pub enum WizardState {
     UpdatingPersonaId,
     /// Updating persona - waiting for new name
     UpdatingPersonaName { id: i64 },
+    /// Updating persona - waiting for new display name
+    UpdatingPersonaDisplayName { id: i64, name: String },
+    /// Updating persona - waiting for new triggers
+    UpdatingPersonaTriggers { id: i64, name: String, display_name: Option<String> },
     /// Updating persona - waiting for new prompt
-    UpdatingPersonaPrompt { id: i64, name: String },
+    UpdatingPersonaPrompt { id: i64, name: String, display_name: Option<String>, triggers: Option<String> },
     /// Deleting persona - waiting for confirmation
     DeletingPersonaConfirm { id: i64 },
     /// Setting keyword triggers
