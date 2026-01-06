@@ -1,516 +1,541 @@
 <div align="center">
 
-# 🤖 PersonaForge
+<!-- ANIMATED HEADER -->
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=PersonaForge&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=🤖%20AI%20Personas%20•%20🧠%20RAG%20Memory%20•%20🎤%20Voice%20•%20👁️%20Vision&descAlignY=52&descSize=18"/>
 
-**Telegram-бот с кастомными AI-персонами, долгосрочной памятью и мультимодальными возможностями.**
+<!-- TYPING ANIMATION -->
+<a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=6C63FF&center=true&vCenter=true&multiline=true&repeat=false&width=600&height=80&lines=Telegram+Bot+with+Customizable+AI+Personas;Long-term+Memory+%26+Multimodal+Capabilities" alt="Typing SVG" /></a>
 
-Создавай уникальные AI-личности, общайся голосом, анализируй изображения — всё локально через Ollama.
+<!-- BADGES ROW 1 -->
+<p>
+<a href="https://github.com/bobberdolle1/PersonaForge/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/bobberdolle1/PersonaForge/ci.yml?style=for-the-badge&logo=github-actions&logoColor=white&label=CI&color=2ea44f" alt="CI"></a>
+<a href="https://github.com/bobberdolle1/PersonaForge/releases"><img src="https://img.shields.io/github/v/release/bobberdolle1/PersonaForge?style=for-the-badge&logo=semantic-release&logoColor=white&color=6C63FF" alt="Release"></a>
+<a href="https://github.com/bobberdolle1/PersonaForge/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bobberdolle1/PersonaForge?style=for-the-badge&logo=opensourceinitiative&logoColor=white&color=green" alt="License"></a>
+</p>
 
-[![CI](https://github.com/bobberdolle1/PersonaForge/actions/workflows/ci.yml/badge.svg)](https://github.com/bobberdolle1/PersonaForge/actions/workflows/ci.yml)
-[![Release](https://github.com/bobberdolle1/PersonaForge/actions/workflows/release.yml/badge.svg)](https://github.com/bobberdolle1/PersonaForge/actions/workflows/release.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub release](https://img.shields.io/github/v/release/bobberdolle1/PersonaForge?include_prereleases)](https://github.com/bobberdolle1/PersonaForge/releases)
+<!-- BADGES ROW 2 -->
+<p>
+<img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust">
+<img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram">
+<img src="https://img.shields.io/badge/Ollama-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Ollama">
+<img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
+<img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
+</p>
 
-![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)
-![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=flat&logo=telegram&logoColor=white)
-![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-blue)
-![SQLite](https://img.shields.io/badge/SQLite-07405E?style=flat&logo=sqlite&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
+<!-- STATS -->
+<p>
+<img src="https://img.shields.io/github/stars/bobberdolle1/PersonaForge?style=for-the-badge&logo=github&color=yellow" alt="Stars">
+<img src="https://img.shields.io/github/forks/bobberdolle1/PersonaForge?style=for-the-badge&logo=github&color=blue" alt="Forks">
+<img src="https://img.shields.io/github/issues/bobberdolle1/PersonaForge?style=for-the-badge&logo=github&color=red" alt="Issues">
+<img src="https://img.shields.io/github/last-commit/bobberdolle1/PersonaForge?style=for-the-badge&logo=github&color=purple" alt="Last Commit">
+</p>
 
-[📖 Documentation](https://bobberdolle1.github.io/PersonaForge) · [🐛 Report Bug](https://github.com/bobberdolle1/PersonaForge/issues/new?template=bug_report.md) · [✨ Request Feature](https://github.com/bobberdolle1/PersonaForge/issues/new?template=feature_request.md)
+<!-- QUICK LINKS -->
+<p>
+<a href="https://github.com/bobberdolle1/PersonaForge/wiki"><img src="https://img.shields.io/badge/📖_Documentation-Wiki-blue?style=for-the-badge" alt="Wiki"></a>
+<a href="https://github.com/bobberdolle1/PersonaForge/issues/new?template=bug_report.md"><img src="https://img.shields.io/badge/🐛_Report-Bug-red?style=for-the-badge" alt="Bug"></a>
+<a href="https://github.com/bobberdolle1/PersonaForge/issues/new?template=feature_request.md"><img src="https://img.shields.io/badge/✨_Request-Feature-green?style=for-the-badge" alt="Feature"></a>
+<a href="https://github.com/bobberdolle1/PersonaForge/discussions"><img src="https://img.shields.io/badge/💬_Join-Discussions-purple?style=for-the-badge" alt="Discussions"></a>
+</p>
 
+</div>
+
+<!-- DEMO GIF -->
+<div align="center">
+<br>
+<img src="https://raw.githubusercontent.com/bobberdolle1/PersonaForge/main/.github/assets/demo.gif" width="700" alt="PersonaForge Demo">
+<br><br>
 </div>
 
 ---
 
-## ✨ Возможности
 
-### 🎭 Персоны
-- Создавай AI-личности с уникальными характерами
-- Переключайся между персонами на лету
-- Экспорт/импорт персон в JSON
-- Каждая персона — свой стиль, знания, манера общения
-- **Кастомное имя** — персона откликается на своё имя (или имя бота по умолчанию)
-- **Триггеры персоны** — ключевые слова для активации конкретной персоны
+<!-- FEATURES SECTION -->
+## <img src="https://media.giphy.com/media/iY8CRBdQXODJSCERIr/giphy.gif" width="30"> Features
 
-### 🧠 RAG-память
-- Бот помнит контекст разговоров
-- Векторный поиск релевантных воспоминаний
-- Time-decay: свежие воспоминания важнее старых
-- Автоматическая суммаризация длинных диалогов
+<table>
+<tr>
+<td width="50%">
 
-### 🎤 Голос
-- Распознавание голосовых сообщений через Whisper
-- Отвечает на голосовые как на текст
-- Ответы через активную персону
+### 🎭 AI Personas
+Create unique AI personalities with custom prompts, display names, and trigger keywords. Switch between personas on the fly.
 
-### 👁️ Зрение
-- Анализ изображений через multimodal модели
-- **GIF-анимации** — извлечение 3 кадров (начало, середина, конец)
-- **Видеосообщения (кружки)** — анализ видео + транскрипция аудио
-- Описание, вопросы по картинкам
-- Все ответы через активную персону
+```json
+{
+  "name": "Philosopher",
+  "display_name": "Сократ",
+  "triggers": "философия,смысл,почему",
+  "prompt": "Ты — Сократ..."
+}
+```
 
-### 🌐 Веб-поиск
-- Интеграция с DuckDuckGo
-- Актуальная информация в ответах
+</td>
+<td width="50%">
 
-### 🎯 Триггеры и режимы ответов
-- **Триггеры** — ключевые слова для активации (на уровне чата или персоны)
-- **Режим `mention_only`** — отвечает только на @упоминания, триггеры и имя
-- **Режим `all_messages`** — отвечает с заданной вероятностью (`RANDOM_REPLY_PROBABILITY`)
-- Триггеры и упоминания работают всегда (100%), независимо от режима
+### 🧠 RAG Memory
+Vector-based conversation memory with time-decay weighting. The bot remembers context and uses relevant information.
 
-### 🗣️ Имя бота
-- Бот знает своё имя из Telegram профиля
-- Откликается когда его называют по имени
-- Имя автоматически добавляется в промпт
-- Персоны могут иметь своё кастомное имя
+```
+score = similarity × e^(-decay × hours/24)
+```
 
-### ⏸️ Пауза
-- Приостановка работы бота одной кнопкой
-- Доступно в меню и Mini App
-- Команды владельца работают даже на паузе
+</td>
+</tr>
+<tr>
+<td width="50%">
 
-### 💬 Поддержка топиков
-- Работает в супергруппах с форумами
-- Отвечает в том же топике где написали
-- Typing indicator в правильном топике
+### 🎤 Voice Messages
+Whisper-powered voice transcription. Send voice messages and get intelligent responses through your active persona.
 
-### ⌨️ Индикатор набора
-- Бот показывает "печатает..." пока генерирует ответ
-- Визуальная обратная связь для пользователя
+</td>
+<td width="50%">
 
-### 📝 Markdown в ответах
-- Поддержка форматирования Telegram MarkdownV2
-- Жирный, курсив, код, блоки кода
-- Автоматический fallback на plain text при ошибках парсинга
+### 👁️ Vision & Media
+Analyze images, GIFs (3-frame extraction), and video messages. Multimodal understanding through LLaVA/BakLLaVA.
 
-### 🛡️ Защита от Prompt Injection
-- Санитизация пользовательского ввода
-- Детекция 40+ паттернов атак (EN/RU)
-- Адаптивный rate limiting по истории нарушений
-- Временные блокировки подозрительных пользователей
-- Экранирование маркеров ролей в промптах
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🌐 Web Search
+DuckDuckGo integration for real-time information. No API keys required — privacy-focused search.
+
+</td>
+<td width="50%">
+
+### 🛡️ Security
+40+ prompt injection patterns detection, strike system, adaptive rate limiting, and automatic blocking.
+
+</td>
+</tr>
+</table>
 
 ---
 
-## 🚀 Быстрый старт
 
-### Требования
+<!-- QUICK START -->
+## <img src="https://media.giphy.com/media/WUlplcMpOCEmTGBtBW/giphy.gif" width="30"> Quick Start
+
+<details>
+<summary><b>📋 Prerequisites</b></summary>
+<br>
+
 - [Rust](https://rustup.rs/) 1.70+
-- [Ollama](https://ollama.ai/) с моделями
-- Telegram Bot Token ([@BotFather](https://t.me/BotFather))
+- [Ollama](https://ollama.ai/) with models
+- Telegram Bot Token from [@BotFather](https://t.me/BotFather)
 
-### Установка
+</details>
+
+### ⚡ One-liner Install
 
 ```bash
-# Клонируй репозиторий
-git clone https://github.com/bobberdolle1/PersonaForge.git
-cd persona-forge
-
-# Скопируй конфиг
-cp .env.example .env
-
-# Отредактируй .env
-nano .env
-
-# Запусти
-cargo run --release
+git clone https://github.com/bobberdolle1/PersonaForge.git && cd PersonaForge && cp .env.example .env
 ```
 
-### Минимальный .env
+### 🔧 Configure
 
 ```env
 TELOXIDE_TOKEN=your_bot_token_here
 OWNER_ID=your_telegram_id
 DATABASE_URL=sqlite:persona_forge.db
-
-OLLAMA_URL=http://localhost:11434
 OLLAMA_CHAT_MODEL=llama3.2
-OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 ```
 
-### Docker
+### 🚀 Run
 
+<table>
+<tr>
+<td>
+
+**Cargo**
+```bash
+cargo run --release
+```
+
+</td>
+<td>
+
+**Docker**
 ```bash
 docker-compose up --build
 ```
 
+</td>
+</tr>
+</table>
+
 ---
 
-## 📖 Использование
 
-### Inline-меню
-Отправь `/menu` — откроется интерактивное меню со всеми функциями:
+<!-- ARCHITECTURE -->
+## <img src="https://media.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif" width="25"> Architecture
+
+```mermaid
+graph TB
+    subgraph Telegram
+        TG[Telegram API]
+    end
+    
+    subgraph PersonaForge
+        BOT[🤖 Bot Handlers]
+        WEB[🌐 Mini App]
+        SEC[🛡️ Security]
+        RAG[🧠 RAG Engine]
+        DB[(💾 SQLite)]
+    end
+    
+    subgraph External
+        OLL[🦙 Ollama]
+        WHI[🎤 Whisper]
+        DDG[🔍 DuckDuckGo]
+    end
+    
+    TG <--> BOT
+    TG <--> WEB
+    BOT --> SEC
+    BOT --> RAG
+    BOT <--> DB
+    RAG <--> DB
+    BOT <--> OLL
+    BOT <--> WHI
+    BOT <--> DDG
+    WEB <--> DB
+    
+    style BOT fill:#6C63FF,color:#fff
+    style RAG fill:#00D9FF,color:#000
+    style SEC fill:#FF6B6B,color:#fff
+    style DB fill:#4CAF50,color:#fff
+```
+
+<details>
+<summary><b>📁 Project Structure</b></summary>
 
 ```
-🤖 PersonaForge
-
-🎭 Персоны     ⚙️ Конфиг
-💬 Чат         🛠️ Инструменты
-📊 Статус       ❓ Помощь
+src/
+├── main.rs              # Entry point, dispatcher setup
+├── config.rs            # Environment configuration
+├── state.rs             # Shared state (AppState)
+├── logging.rs           # Colored logging system
+│
+├── bot/handlers/
+│   ├── commands.rs      # /menu, /status, /create_persona...
+│   ├── messages.rs      # Message processing, RAG retrieval
+│   └── callbacks.rs     # Inline keyboard handlers
+│
+├── db/                  # SQLx queries
+├── llm/                 # Ollama client
+├── security/            # Prompt injection protection
+├── voice/               # Whisper integration
+├── web/                 # DuckDuckGo search
+└── webapp/              # Mini App (Axum + embedded frontend)
 ```
 
-### Основные команды
+</details>
 
-| Команда | Описание |
-|---------|----------|
-| `/start` | Приветствие и информация о боте |
-| `/menu` | Главное меню |
-| `/status` | Статус системы |
-| `/help` | Справка |
-| `/cancel` | Отмена текущего действия (wizard) |
-
-### Персоны
-
-| Команда | Описание |
-|---------|----------|
-| `/create_persona название\|промпт` | Создать персону |
-| `/list_personas` | Список персон |
-| `/activate_persona ID` | Активировать |
-| `/delete_persona ID` | Удалить |
-| `/export_persona ID` | Экспорт в JSON |
-| `/import_persona` | Импорт из JSON |
-
-### Настройки
-
-| Команда | Описание |
-|---------|----------|
-| `/set_model название` | Сменить модель |
-| `/set_temperature 0.7` | Температура (0.0-2.0) |
-| `/set_max_tokens 2048` | Макс. токенов |
-| `/enable_rag` / `/disable_rag` | RAG-память |
-| `/triggers слово1, слово2` | Ключевые слова |
-
-### Безопасность
-
-| Команда | Описание |
-|---------|----------|
-| `/block user_id [мин]` | Заблокировать пользователя |
-| `/unblock user_id` | Разблокировать |
-| `/security_status [user_id]` | Статус безопасности |
-
-### Профиль
-
-| Команда | Описание |
-|---------|----------|
-| `/whoami` | Досье — что бот знает о тебе (доступно всем) |
+---
 
 
-## 📱 Mini App (Web Panel)
+<!-- COMMANDS -->
+## <img src="https://media.giphy.com/media/jSKBmKkvo2dPQQtsR1/giphy.gif" width="25"> Commands
 
-Веб-панель управления для владельца бота — полноценный интерфейс прямо в Telegram.
+<div align="center">
 
-### Возможности Mini App
+| Command | Description |
+|:--------|:------------|
+| `/menu` | 🎛️ Interactive main menu |
+| `/status` | 📊 System status (Ollama, DB, queue) |
+| `/create_persona name\|prompt` | 🎭 Create new persona |
+| `/list_personas` | 📋 List all personas |
+| `/activate_persona ID` | ✅ Activate persona |
+| `/set_model name` | 🧠 Change LLM model |
+| `/set_temperature 0.7` | 🌡️ Set temperature |
+| `/triggers word1, word2` | 🎯 Set trigger keywords |
+| `/enable_rag` / `/disable_rag` | 🧠 Toggle RAG memory |
+| `/block user_id [min]` | 🚫 Block user |
+| `/whoami` | 👤 What bot knows about you |
 
-- **📊 Status** — мониторинг Ollama, БД, очереди LLM в реальном времени
-- **🎭 Personas** — создание, редактирование, удаление, активация персон
-- **💬 Chats** — управление настройками всех чатов
-- **🛡️ Security** — проверка и блокировка пользователей, статистика нарушений
-- **⚙️ Config** — изменение модели, температуры, токенов, тогглов без перезапуска
+</div>
 
-### Настройка Mini App
+---
 
-1. **Запусти туннель** (для HTTPS):
+
+<!-- MINI APP -->
+## <img src="https://media.giphy.com/media/ln7z2eWriiQAllfVcn/giphy.gif" width="25"> Mini App
+
+<div align="center">
+<table>
+<tr>
+<td align="center"><b>📊 Status</b><br><sub>Real-time monitoring</sub></td>
+<td align="center"><b>🎭 Personas</b><br><sub>Create & manage</sub></td>
+<td align="center"><b>💬 Chats</b><br><sub>Settings per chat</sub></td>
+<td align="center"><b>🛡️ Security</b><br><sub>Block & monitor</sub></td>
+<td align="center"><b>⚙️ Config</b><br><sub>Runtime settings</sub></td>
+</tr>
+</table>
+</div>
+
+<details>
+<summary><b>🔧 Setup Mini App</b></summary>
+
+1. **Start HTTPS tunnel:**
 ```bash
-# Вариант 1: serveo.net (бесплатно, без регистрации)
 ssh -R 80:localhost:8080 serveo.net
-
-# Вариант 2: ngrok (нужна регистрация)
-ngrok http 8080
-
-# Вариант 3: cloudflared
-cloudflared tunnel --url http://localhost:8080
+# or: ngrok http 8080
 ```
 
-2. **Создай Mini App в BotFather**:
+2. **Create in @BotFather:**
 ```
-/newapp
-→ Выбери своего бота
-→ Название: PersonaForge Panel
-→ Описание: Owner control panel
-→ URL: https://your-tunnel-url.com
+/newapp → Select bot → Name: PersonaForge Panel → URL: https://your-url.com
 ```
 
-3. **Добавь кнопку меню**:
+3. **Add menu button:**
 ```
-/setmenubutton
-→ Выбери бота
-→ Тип: web_app
-→ Текст: 🎛️ Panel
-→ URL: https://your-tunnel-url.com
+/setmenubutton → Select bot → web_app → 🎛️ Panel → URL
 ```
 
-### Аутентификация
-
-Mini App использует Telegram WebApp authentication:
-- Проверка `initData` через HMAC-SHA256
-- Доступ только для `OWNER_ID`
-- Автоматическая валидация при каждом запросе
-
-### API Endpoints
-
-| Endpoint | Метод | Описание |
-|----------|-------|----------|
-| `/api/status` | GET | Статус системы |
-| `/api/personas` | GET | Список персон |
-| `/api/personas` | POST | Создать персону |
-| `/api/personas/:id` | PUT | Обновить персону |
-| `/api/personas/:id` | DELETE | Удалить персону |
-| `/api/personas/:id/activate` | POST | Активировать |
-| `/api/chats` | GET | Список чатов |
-| `/api/chats/:id` | PUT | Обновить настройки |
-| `/api/config` | GET | Получить конфиг |
-| `/api/config` | POST | Обновить конфиг |
-| `/api/security` | GET | Конфиг безопасности |
-| `/api/security/users/:id` | GET | Статус пользователя |
-| `/api/security/users/:id/block` | POST | Заблокировать |
-| `/api/security/users/:id/unblock` | POST | Разблокировать |
-| `/api/pause` | GET | Статус паузы |
-| `/api/pause` | POST | Переключить паузу |
-
-### Runtime Config
-
-Настройки из Mini App сохраняются в БД и применяются без перезапуска:
-- `ollama_chat_model` — модель для чата
-- `temperature` — температура генерации
-- `max_tokens` — максимум токенов
-- `vision_enabled`, `voice_enabled`, `web_search_enabled` — тогглы функций
+</details>
 
 ---
 
-## ⚙️ Конфигурация
 
-### Полный .env
+<!-- CONFIGURATION -->
+## <img src="https://media.giphy.com/media/VgCDAzcKvsR6OM0uWg/giphy.gif" width="25"> Configuration
+
+<details>
+<summary><b>📝 Full .env Example</b></summary>
 
 ```env
-# === Telegram ===
+# ═══════════════════════════════════════════════════════════════
+# 🤖 TELEGRAM
+# ═══════════════════════════════════════════════════════════════
 TELOXIDE_TOKEN=your_bot_token
 OWNER_ID=123456789
-BOT_NAME=PersonaForge
 
-# === Database ===
+# ═══════════════════════════════════════════════════════════════
+# 💾 DATABASE
+# ═══════════════════════════════════════════════════════════════
 DATABASE_URL=sqlite:persona_forge.db
 
-# === Ollama ===
+# ═══════════════════════════════════════════════════════════════
+# 🦙 OLLAMA
+# ═══════════════════════════════════════════════════════════════
 OLLAMA_URL=http://localhost:11434
 OLLAMA_CHAT_MODEL=llama3.2
 OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 OLLAMA_VISION_MODEL=llava
 
-# === Generation ===
+# ═══════════════════════════════════════════════════════════════
+# ⚡ GENERATION
+# ═══════════════════════════════════════════════════════════════
 TEMPERATURE=0.7
 MAX_TOKENS=2048
 LLM_TIMEOUT_SECONDS=120
 
-# === Features ===
+# ═══════════════════════════════════════════════════════════════
+# 🎛️ FEATURES
+# ═══════════════════════════════════════════════════════════════
 VISION_ENABLED=true
 VOICE_ENABLED=true
 WEB_SEARCH_ENABLED=true
 
-# === Whisper (для голоса) ===
+# ═══════════════════════════════════════════════════════════════
+# 🎤 WHISPER
+# ═══════════════════════════════════════════════════════════════
 WHISPER_URL=http://localhost:8080/inference
 
-# === RAG ===
+# ═══════════════════════════════════════════════════════════════
+# 🧠 RAG
+# ═══════════════════════════════════════════════════════════════
 RAG_DECAY_RATE=0.1
 SUMMARY_THRESHOLD=50
 
-# === Queue ===
+# ═══════════════════════════════════════════════════════════════
+# 📊 QUEUE
+# ═══════════════════════════════════════════════════════════════
 MAX_CONCURRENT_LLM_REQUESTS=3
 QUEUE_TIMEOUT_SECONDS=30
 
-# === Behavior ===
-# Вероятность ответа в режиме all_messages (0.0-1.0)
-# 0.0 = только триггеры/упоминания, 0.3 = 30% сообщений, 1.0 = всегда
-RANDOM_REPLY_PROBABILITY=0.0
-
-# === WebApp (опционально) ===
+# ═══════════════════════════════════════════════════════════════
+# 🌐 WEBAPP
+# ═══════════════════════════════════════════════════════════════
 WEBAPP_PORT=8080
 ```
 
+</details>
+
 ---
 
-## 🏗️ Архитектура
 
-```
-src/
-├── main.rs              # Entry point
-├── config.rs            # Environment config
-├── state.rs             # Shared state (AppState)
-├── logging.rs           # Beautiful colored logging system
-├── bot/
-│   └── handlers/
-│       ├── commands.rs  # Slash commands
-│       ├── messages.rs  # Message processing, RAG
-│       └── callbacks.rs # Inline keyboard handlers
-├── db/
-│   └── mod.rs           # SQLx queries
-├── llm/
-│   └── client.rs        # Ollama API client
-├── security/
-│   └── mod.rs           # Prompt injection protection
-├── voice/
-│   └── mod.rs           # Whisper client
-├── web/
-│   └── search.rs        # DuckDuckGo search
-└── webapp/              # Owner web panel (optional)
+<!-- PERSONAS EXAMPLES -->
+## <img src="https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" width="25"> Persona Examples
+
+<table>
+<tr>
+<td>
+
+**🧙 Philosopher**
+```json
+{
+  "name": "Сократ",
+  "triggers": "философия,смысл",
+  "prompt": "Ты — Сократ. Отвечаешь вопросами, подводя к истине."
+}
 ```
 
-### Логирование
+</td>
+<td>
 
-PersonaForge использует продвинутую систему логирования с:
+**🤖 Tech Expert**
+```json
+{
+  "name": "Техник",
+  "triggers": "код,баг,ошибка",
+  "prompt": "Ты — senior разработчик. Даёшь чёткие ответы с примерами кода."
+}
+```
 
-- **🎨 Цветной вывод** — уровни логов выделены цветами (ERROR красный, WARN жёлтый, INFO зелёный, DEBUG синий)
-- **📊 Метрики сессии** — при shutdown выводится статистика: uptime, сообщения, LLM запросы, embeddings, voice/vision, ошибки
-- **🔇 Подавление спама** — повторяющиеся логи (embeddings) группируются
-- **⏱️ Цветовая индикация времени** — LLM ответы: <1s зелёный, 1-3s жёлтый, >3s красный
-- **🚀 Красивый баннер** — ASCII-арт при старте с конфигурацией
+</td>
+</tr>
+<tr>
+<td>
 
-Пример вывода:
+**🎬 Character**
+```json
+{
+  "name": "Чувак",
+  "triggers": "dude,боулинг",
+  "prompt": "Ты — The Dude из 'Большой Лебовски'. Расслабленный философ."
+}
+```
+
+</td>
+<td>
+
+**👋 Friend**
+```json
+{
+  "name": "Бро",
+  "triggers": "бро,друг",
+  "prompt": "Ты — лучший друг. Поддерживаешь, шутишь, общаешься неформально."
+}
+```
+
+</td>
+</tr>
+</table>
+
+---
+
+
+<!-- TECH STACK -->
+## <img src="https://media.giphy.com/media/uhQuegHFqkVYuFMXMQ/giphy.gif" width="25"> Tech Stack
+
+<div align="center">
+
+| Category | Technologies |
+|:--------:|:-------------|
+| **Language** | ![Rust](https://img.shields.io/badge/Rust-000000?style=flat-square&logo=rust&logoColor=white) ![Tokio](https://img.shields.io/badge/Tokio-async-blue?style=flat-square) |
+| **Bot** | ![Teloxide](https://img.shields.io/badge/Teloxide-Telegram_Bot-2CA5E0?style=flat-square&logo=telegram) |
+| **Web** | ![Axum](https://img.shields.io/badge/Axum-Web_Framework-orange?style=flat-square) |
+| **Database** | ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white) ![SQLx](https://img.shields.io/badge/SQLx-async-green?style=flat-square) |
+| **AI** | ![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-black?style=flat-square) ![Whisper](https://img.shields.io/badge/Whisper-Voice-yellow?style=flat-square) |
+| **Search** | ![DuckDuckGo](https://img.shields.io/badge/DuckDuckGo-Privacy-DE5833?style=flat-square&logo=duckduckgo&logoColor=white) |
+| **Deploy** | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white) ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=github-actions&logoColor=white) |
+
+</div>
+
+---
+
+
+<!-- LOGGING -->
+## <img src="https://media.giphy.com/media/KzJkzjggfGN5Py6nkT/giphy.gif" width="25"> Beautiful Logging
+
 ```
 ╔══════════════════════════════════════════════════════════════╗
 ║   ██████╗ ███████╗██████╗ ███████╗ ██████╗ ███╗   ██╗ █████╗ ║
-║   ...                                                        ║
+║   ██╔══██╗██╔════╝██╔══██╗██╔════╝██╔═══██╗████╗  ██║██╔══██╗║
+║   ██████╔╝█████╗  ██████╔╝███████╗██║   ██║██╔██╗ ██║███████║║
+║   ██╔═══╝ ██╔══╝  ██╔══██╗╚════██║██║   ██║██║╚██╗██║██╔══██║║
+║   ██║     ███████╗██║  ██║███████║╚██████╔╝██║ ╚████║██║  ██║║
+║   ╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝║
 ║              🤖 F O R G E   v1.0.0                           ║
 ╚══════════════════════════════════════════════════════════════╝
 
 ┌─ Configuration ─────────────────────────────────────────────┐
 │  🤖  Bot Name    │ PersonaForge                             │
 │  🧠  LLM Model   │ llama3.2                                 │
-│  ✓  Vision      │ Enabled                                  │
+│  ✓   Vision      │ Enabled                                  │
 └──────────────────────────────────────────────────────────────┘
 
 ✓  Database connected: sqlite:persona_forge.db
-✓  Bot identity: Иван (@mybot)
+✓  Bot identity: MyBot (@my_bot)
 ✓  WebApp listening on port 8080
 
-══════════════════════════════════════════════════════════════
 🚀  PersonaForge is ready and listening!
-══════════════════════════════════════════════════════════════
 
 12:34:56 INF [messages] 💬 User in -123456: "Привет!"
 12:34:57 INF [llm] 🧠 Response in 1234ms (156 chars)
 ```
 
-### База данных
-
-| Таблица | Описание |
-|---------|----------|
-| `personas` | AI-личности (name, prompt, display_name, triggers) |
-| `chat_settings` | Настройки чатов |
-| `messages` | История сообщений |
-| `memory_chunks` | RAG-эмбеддинги |
-| `chat_summaries` | Суммаризации |
-| `runtime_config` | Runtime-настройки |
-
 ---
 
-## 🧠 Как работает RAG
 
-1. **Сохранение**: каждое сообщение → эмбеддинг → БД
-2. **Поиск**: новое сообщение → эмбеддинг → cosine similarity
-3. **Time-decay**: `score = similarity × e^(-decay × hours/24) × importance`
-4. **Контекст**: топ-N релевантных чанков добавляются в промпт
-5. **Суммаризация**: старые диалоги сжимаются в краткие саммари
+<!-- CONTRIBUTING -->
+## <img src="https://media.giphy.com/media/du3J3cXyzhj75IOgvA/giphy.gif" width="25"> Contributing
 
----
+<div align="center">
 
-## 🎭 Примеры персон
+Contributions are welcome! 🎉
 
-### Технарь
-```json
-{
-  "name": "Чувак",
-  "display_name": "Чувак",
-  "triggers": "чувак,man,dude,боулинг",
-  "prompt": "Меня зовут Джеффри Лебовски, но все называют меня просто Чувак. The Dude..."
-}
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](https://github.com/bobberdolle1/PersonaForge/pulls)
+
+</div>
+
+1. Fork the repository
+2. Create your branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'feat: add amazing feature'`
+4. Push: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+<details>
+<summary><b>📋 Before submitting</b></summary>
+
+```bash
+cargo fmt          # Format code
+cargo clippy       # Lint
+cargo test         # Run tests
+cargo audit        # Security check
 ```
 
-### Философ
-```json
-{
-  "name": "Сократ",
-  "display_name": "Сократ",
-  "triggers": "философия,смысл,почему",
-  "prompt": "Ты — Сократ, древнегреческий философ..."
-}
-```
-
-### Друг
-```json
-{
-  "name": "Бро",
-  "display_name": null,
-  "triggers": "бро,друг,поддержи",
-  "prompt": "Ты — лучший друг из чата..."
-}
-```
-
-> **Примечание:** `display_name: null` означает использование имени бота по умолчанию.
+</details>
 
 ---
 
-## 🐳 Docker Compose
 
-```yaml
-services:
-  persona-forge:
-    build: .
-    env_file: .env
-    volumes:
-      - ./persona_forge.db:/app/persona_forge.db
-    depends_on:
-      - ollama
+<!-- FOOTER -->
+## <img src="https://media.giphy.com/media/LnQjpWaON8nhr21vNW/giphy.gif" width="25"> Support
 
-    restart: unless-stopped
+<div align="center">
 
-  ollama:
-    image: ollama/ollama
-    volumes:
-      - ollama_data:/root/.ollama
-    ports:
-      - "11434:11434"
-
-volumes:
-  ollama_data:
-```
-
----
-
-## 📝 Лицензия
-
-Этот проект лицензирован под [MIT License](LICENSE).
-
----
-
-## 🤝 Contributing
-
-Вклад в проект приветствуется! Пожалуйста, прочитайте [CONTRIBUTING.md](CONTRIBUTING.md) для деталей.
-
-- 🐛 [Сообщить о баге](https://github.com/bobberdolle1/PersonaForge/issues/new?template=bug_report.md)
-- ✨ [Предложить фичу](https://github.com/bobberdolle1/PersonaForge/issues/new?template=feature_request.md)
-- 💬 [Обсуждения](https://github.com/bobberdolle1/PersonaForge/discussions)
-
----
-
-## 🛡️ Security
-
-Нашли уязвимость? Пожалуйста, прочитайте [SECURITY.md](SECURITY.md) для ответственного раскрытия.
-
----
-
-## ⭐ Star History
+If you like this project, please give it a ⭐!
 
 [![Star History Chart](https://api.star-history.com/svg?repos=bobberdolle1/PersonaForge&type=Date)](https://star-history.com/#bobberdolle1/PersonaForge&Date)
+
+</div>
 
 ---
 
 <div align="center">
 
-**[⬆ Наверх](#-personaforge)**
+### 📜 License
 
-Made with 🦀 Rust & ❤️
+This project is licensed under the [MIT License](LICENSE)
+
+---
+
+<sub>Made with 🦀 Rust and ❤️</sub>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=100&section=footer"/>
 
 </div>
