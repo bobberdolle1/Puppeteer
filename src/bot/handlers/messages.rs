@@ -3,6 +3,7 @@ use crate::state::{AppState, DialogueState, PendingBatch, WizardState};
 use teloxide::prelude::*;
 use teloxide::types::{ParseMode, ReplyParameters};
 use std::time::Instant;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 const MAX_CONTEXT_MESSAGES: usize = 20;
 const MAX_RAG_CHUNKS: u32 = 3;
@@ -11,7 +12,107 @@ const DEBOUNCE_MS: u64 = 1500; // Wait 1.5 seconds for more messages
 
 pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
+    let thread_id = msg.thread_id;
+    
+    // Check for GIF (animation), video_note (circle video), or voice message
+    let media_description = if let Some(animation) = msg.animation() {
+        if state.config.vision_enabled {
+            log::info!("Received GIF in chat {}", chat_id);
+            
+            // Show typing indicator
+            let mut typing = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
+            if let Some(tid) = thread_id {
+                typing = typing.message_thread_id(tid);
+            }
+            let _ = typing.await;
+            
+            match process_animation(
+                &bot,
+                &state,
+                &animation.file.id.0,
+                msg.caption(),
+            ).await {
+                Ok(desc) => Some(desc),
+                Err(e) => {
+                    log::error!("Failed to process GIF: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else if let Some(video_note) = msg.video_note() {
+        // Video notes can be processed with voice OR vision (or both)
+        if state.config.vision_enabled || state.config.voice_enabled {
+            log::info!("Received video_note in chat {}", chat_id);
+            
+            // Show typing indicator
+            let mut typing = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
+            if let Some(tid) = thread_id {
+                typing = typing.message_thread_id(tid);
+            }
+            let _ = typing.await;
+            
+            match process_video_note(
+                &bot,
+                &state,
+                &video_note.file.id.0,
+            ).await {
+                Ok(desc) => Some(desc),
+                Err(e) => {
+                    log::error!("Failed to process video_note: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else if let Some(voice) = msg.voice() {
+        // Voice messages - transcribe with Whisper
+        if state.config.voice_enabled {
+            log::info!("Received voice message in chat {}", chat_id);
+            
+            // Show typing indicator
+            let mut typing = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
+            if let Some(tid) = thread_id {
+                typing = typing.message_thread_id(tid);
+            }
+            let _ = typing.await;
+            
+            match process_voice_message(&bot, &state, &voice.file.id.0).await {
+                Ok(transcript) => Some(format!("[Голосовое сообщение]: {}", transcript)),
+                Err(e) => {
+                    log::error!("Failed to process voice message: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    // Get text from message OR use media description as context
     let text = msg.text().unwrap_or_default();
+    
+    // Build effective message content: combine text with media description
+    let effective_text = match (&media_description, text.is_empty()) {
+        (Some(media_desc), true) => {
+            // Only media, no text caption
+            format!("[Пользователь отправил медиа]\n{}", media_desc)
+        }
+        (Some(media_desc), false) => {
+            // Media with caption
+            format!("[Пользователь отправил медиа с подписью: \"{}\"]\n{}", text, media_desc)
+        }
+        (None, _) => text.to_string(),
+    };
+    
+    // Skip if no content to process
+    if effective_text.is_empty() {
+        return Ok(());
+    }
 
     if text.starts_with('/') {
         // Handle commands
@@ -89,10 +190,12 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     // If someone replies to bot's message, always reply
     // If someone mentions bot by name (or persona's display name), always reply
     // If message contains a keyword trigger (chat or persona), always reply
+    // If message contains media (GIF/video_note), always reply
     let is_private = msg.chat.is_private();
     let is_reply_to_bot = msg.reply_to_message().map(|reply| {
         reply.from.as_ref().map(|u| u.is_bot).unwrap_or(false)
     }).unwrap_or(false);
+    let has_media = media_description.is_some();
     
     // Check if bot is mentioned by name, persona display name, or username
     let bot_name = state.get_bot_name().await;
@@ -125,7 +228,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         chat_triggered || persona_triggered
     };
     
-    let should_reply = if is_private || is_reply_to_bot || is_mentioned_by_name || is_triggered || chat_settings.reply_mode == "all_messages" {
+    let should_reply = if is_private || is_reply_to_bot || is_mentioned_by_name || is_triggered || has_media || chat_settings.reply_mode == "all_messages" {
         true
     } else {
         // For "mention_only" mode, check if bot is mentioned
@@ -170,7 +273,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
             user_id: Some(user_id),
             user_name: user_name.clone(),
         });
-        batch.messages.push(text.to_string());
+        batch.messages.push(effective_text.clone());
         batch.last_message_time = Instant::now();
         
         // If this is not the first message in batch, just add and return
@@ -197,12 +300,12 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
                 
                 // Try again
                 let mut pending = state.pending_messages.lock().await;
-                pending.remove(&batch_key).map(|b| b.messages.join("\n")).unwrap_or_else(|| text.to_string())
+                pending.remove(&batch_key).map(|b| b.messages.join("\n")).unwrap_or_else(|| effective_text.clone())
             } else {
                 batch.messages.join("\n")
             }
         } else {
-            text.to_string()
+            effective_text.clone()
         }
     };
 
@@ -351,6 +454,298 @@ async fn save_and_embed_message(state: &AppState, msg: &Message) {
             }
         });
     }
+}
+
+/// Extract 3 frames from video/GIF (start, middle, end) using ffmpeg
+async fn extract_frames_from_video(video_data: &[u8]) -> Result<Vec<Vec<u8>>, String> {
+    use tokio::process::Command;
+    
+    // Create temp file for input video
+    let temp_dir = std::env::temp_dir();
+    let input_path = temp_dir.join(format!("pf_input_{}.mp4", std::process::id()));
+    // Write video data to temp file
+    tokio::fs::write(&input_path, video_data).await
+        .map_err(|e| format!("Failed to write temp video: {}", e))?;
+    
+    // Get video duration using ffprobe
+    let duration_output = Command::new("ffprobe")
+        .args([
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            input_path.to_str().unwrap(),
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("ffprobe failed: {}", e))?;
+    
+    let duration_str = String::from_utf8_lossy(&duration_output.stdout);
+    let duration: f64 = duration_str.trim().parse().unwrap_or(1.0);
+    
+    // Calculate timestamps for 3 frames: start (0.1s), middle, end (duration - 0.1s)
+    let timestamps = vec![
+        0.1_f64.min(duration * 0.1),
+        duration / 2.0,
+        (duration - 0.1).max(duration * 0.9),
+    ];
+    
+    let mut frames = Vec::new();
+    
+    for (i, ts) in timestamps.iter().enumerate() {
+        let frame_path = temp_dir.join(format!("pf_frame_{}_{}.jpg", std::process::id(), i));
+        
+        // Extract single frame at timestamp
+        let result = Command::new("ffmpeg")
+            .args([
+                "-y",
+                "-ss", &format!("{:.3}", ts),
+                "-i", input_path.to_str().unwrap(),
+                "-vframes", "1",
+                "-q:v", "2",
+                "-vf", "scale='min(800,iw)':'-1'", // Resize to max 800px width
+                frame_path.to_str().unwrap(),
+            ])
+            .output()
+            .await;
+        
+        if let Ok(output) = result {
+            if output.status.success() {
+                if let Ok(frame_data) = tokio::fs::read(&frame_path).await {
+                    frames.push(frame_data);
+                }
+            }
+        }
+        
+        // Cleanup frame file
+        let _ = tokio::fs::remove_file(&frame_path).await;
+    }
+    
+    // Cleanup input file
+    let _ = tokio::fs::remove_file(&input_path).await;
+    
+    if frames.is_empty() {
+        return Err("Failed to extract any frames".to_string());
+    }
+    
+    Ok(frames)
+}
+
+/// Download file from Telegram and return bytes
+async fn download_telegram_file(bot: &Bot, file_id: &str) -> Result<Vec<u8>, String> {
+    use teloxide::net::Download;
+    use teloxide::types::FileId;
+    
+    let file = bot.get_file(FileId(file_id.to_string())).await
+        .map_err(|e| format!("Failed to get file info: {}", e))?;
+    
+    let mut buffer = Vec::new();
+    bot.download_file(&file.path, &mut buffer).await
+        .map_err(|e| format!("Failed to download file: {}", e))?;
+    
+    Ok(buffer)
+}
+
+/// Process voice message - transcribe with Whisper
+pub async fn process_voice_message(
+    bot: &Bot,
+    state: &AppState,
+    file_id: &str,
+) -> Result<String, String> {
+    if !state.config.voice_enabled {
+        return Err("Voice is disabled".to_string());
+    }
+    
+    log::info!("Processing voice message with file_id: {}", file_id);
+    
+    // Download the voice file
+    let audio_data = download_telegram_file(bot, file_id).await?;
+    log::debug!("Downloaded {} bytes of audio", audio_data.len());
+    
+    // Transcribe with Whisper
+    let transcript = state.voice_client.transcribe(audio_data, "voice.ogg").await
+        .map_err(|e| format!("Transcription failed: {}", e))?;
+    
+    if transcript.trim().is_empty() {
+        return Err("Empty transcription".to_string());
+    }
+    
+    log::info!("Voice transcription: {}", transcript);
+    Ok(transcript)
+}
+
+/// Process animation (GIF) and generate description
+pub async fn process_animation(
+    bot: &Bot,
+    state: &AppState,
+    file_id: &str,
+    caption: Option<&str>,
+) -> Result<String, String> {
+    if !state.config.vision_enabled {
+        return Err("Vision is disabled".to_string());
+    }
+    
+    log::info!("Processing GIF with file_id: {}", file_id);
+    
+    // Download the file
+    let video_data = download_telegram_file(bot, file_id).await?;
+    log::debug!("Downloaded {} bytes", video_data.len());
+    
+    // Extract frames
+    let frames = extract_frames_from_video(&video_data).await?;
+    log::info!("Extracted {} frames from GIF", frames.len());
+    
+    // Convert frames to base64
+    let images_base64: Vec<String> = frames.iter()
+        .map(|f| BASE64.encode(f))
+        .collect();
+    
+    // Build prompt for vision model
+    let prompt = if let Some(cap) = caption {
+        format!(
+            "Это GIF-анимация из Telegram. Показаны 3 кадра: начало, середина и конец.\n\
+            Подпись от пользователя: \"{}\"\n\n\
+            Опиши что происходит на этой анимации, учитывая подпись. Будь кратким.",
+            cap
+        )
+    } else {
+        "Это GIF-анимация из Telegram. Показаны 3 кадра: начало, середина и конец.\n\n\
+        Опиши что происходит на этой анимации. Будь кратким.".to_string()
+    };
+    
+    // Call vision model
+    let description = state.llm_client.generate_vision(
+        &state.config.ollama_vision_model,
+        &prompt,
+        images_base64,
+        state.config.temperature,
+        state.config.max_tokens,
+    ).await
+    .map_err(|e| format!("Vision model error: {}", e))?;
+    
+    Ok(description)
+}
+
+/// Extract audio from video file using ffmpeg
+async fn extract_audio_from_video(video_data: &[u8]) -> Result<Vec<u8>, String> {
+    use tokio::process::Command;
+    
+    let temp_dir = std::env::temp_dir();
+    let input_path = temp_dir.join(format!("pf_video_{}.mp4", std::process::id()));
+    let output_path = temp_dir.join(format!("pf_audio_{}.ogg", std::process::id()));
+    
+    // Write video data to temp file
+    tokio::fs::write(&input_path, video_data).await
+        .map_err(|e| format!("Failed to write temp video: {}", e))?;
+    
+    // Extract audio using ffmpeg
+    let result = Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-i", input_path.to_str().unwrap(),
+            "-vn",  // No video
+            "-acodec", "libopus",
+            "-b:a", "64k",
+            output_path.to_str().unwrap(),
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("ffmpeg failed: {}", e))?;
+    
+    // Cleanup input
+    let _ = tokio::fs::remove_file(&input_path).await;
+    
+    if !result.status.success() {
+        let _ = tokio::fs::remove_file(&output_path).await;
+        return Err("Failed to extract audio".to_string());
+    }
+    
+    // Read audio file
+    let audio_data = tokio::fs::read(&output_path).await
+        .map_err(|e| format!("Failed to read audio: {}", e))?;
+    
+    // Cleanup output
+    let _ = tokio::fs::remove_file(&output_path).await;
+    
+    Ok(audio_data)
+}
+
+/// Process video_note (circle video) - extract frames + transcribe audio
+pub async fn process_video_note(
+    bot: &Bot,
+    state: &AppState,
+    file_id: &str,
+) -> Result<String, String> {
+    log::info!("Processing video_note with file_id: {}", file_id);
+    
+    // Download the file
+    let video_data = download_telegram_file(bot, file_id).await?;
+    log::debug!("Downloaded {} bytes", video_data.len());
+    
+    let mut result_parts: Vec<String> = Vec::new();
+    
+    // Try to transcribe audio if voice is enabled
+    if state.config.voice_enabled {
+        match extract_audio_from_video(&video_data).await {
+            Ok(audio_data) => {
+                log::info!("Extracted audio ({} bytes), transcribing...", audio_data.len());
+                match state.voice_client.transcribe(audio_data, "video_note.ogg").await {
+                    Ok(transcript) if !transcript.trim().is_empty() => {
+                        log::info!("Transcription: {}", transcript);
+                        result_parts.push(format!("🎤 Сказано: {}", transcript.trim()));
+                    }
+                    Ok(_) => {
+                        log::debug!("Empty transcription");
+                    }
+                    Err(e) => {
+                        log::warn!("Transcription failed: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("Audio extraction failed: {}", e);
+            }
+        }
+    }
+    
+    // Try to analyze video frames if vision is enabled
+    if state.config.vision_enabled {
+        match extract_frames_from_video(&video_data).await {
+            Ok(frames) => {
+                log::info!("Extracted {} frames", frames.len());
+                
+                let images_base64: Vec<String> = frames.iter()
+                    .map(|f| BASE64.encode(f))
+                    .collect();
+                
+                let prompt = "Это видеосообщение (кружок) из Telegram. Показаны 3 кадра: начало, середина и конец.\n\n\
+                    Кратко опиши что видно на видео.";
+                
+                match state.llm_client.generate_vision(
+                    &state.config.ollama_vision_model,
+                    prompt,
+                    images_base64,
+                    state.config.temperature,
+                    state.config.max_tokens,
+                ).await {
+                    Ok(description) => {
+                        result_parts.push(format!("👁 Видно: {}", description.trim()));
+                    }
+                    Err(e) => {
+                        log::warn!("Vision analysis failed: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("Frame extraction failed: {}", e);
+            }
+        }
+    }
+    
+    if result_parts.is_empty() {
+        return Err("Could not process video_note (vision and voice disabled or failed)".to_string());
+    }
+    
+    Ok(result_parts.join("\n\n"))
 }
 
 async fn get_and_update_history_with_depth(dialogues: DialogueState, new_msg: &Message, depth: usize) -> Vec<Message> {

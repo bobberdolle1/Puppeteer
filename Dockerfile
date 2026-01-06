@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     sqlite3 \
     curl \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the compiled binary (static files are embedded via rust_embed)
