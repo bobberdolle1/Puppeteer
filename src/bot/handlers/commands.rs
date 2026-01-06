@@ -37,7 +37,7 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
         "/disable_auto_reply", "/reply_to_all", "/reply_to_mention", "/set_cooldown",
         "/menu", "/settings", "/help", "/triggers", "/keywords", "/broadcast",
         "/queue_stats", "/stats", "/models", "/export_persona", "/export_all_personas",
-        "/import_persona", "/block", "/unblock", "/security_status"
+        "/import_persona", "/block", "/unblock", "/security_status", "/whoami"
     ];
 
     // In group chats, ignore unknown commands (they might be for other bots)
@@ -47,9 +47,12 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
 
     log::info!("⚡ Command from {} ({}): {}", username, user_id.unwrap_or(0), text);
 
-    // /start доступен всем
+    // /start и /whoami доступны всем
     if cmd == "/start" {
         return handle_start(bot, msg, &state).await;
+    }
+    if cmd == "/whoami" {
+        return handle_whoami(bot, msg, &state).await;
     }
 
     // Остальные команды только для владельца
@@ -656,6 +659,9 @@ pub async fn send_help_message(bot: Bot, chat_id: ChatId) -> ResponseResult<()> 
 <b>🛡️ Безопасность:</b>
 /block, /unblock, /security_status
 
+<b>📋 Профиль:</b>
+/whoami - что бот знает о тебе
+
 <b>🎛️ Меню:</b>
 /menu, /settings
 
@@ -822,5 +828,133 @@ async fn handle_cancel(bot: Bot, msg: Message, state: &AppState) -> ResponseResu
     } else {
         bot.send_message(chat_id, "ℹ️ Нечего отменять.").await?;
     }
+    Ok(())
+}
+
+/// Handle /whoami - show user's dossier (what the bot knows about them)
+async fn handle_whoami(bot: Bot, msg: Message, state: &AppState) -> ResponseResult<()> {
+    let chat_id = msg.chat.id;
+    let thread_id = msg.thread_id;
+    let user = msg.from.as_ref();
+    
+    let user_id = match user {
+        Some(u) => u.id.0 as i64,
+        None => {
+            bot.send_message(chat_id, "❌ Не удалось определить пользователя.").await?;
+            return Ok(());
+        }
+    };
+    
+    let user_name = user.map(|u| u.first_name.as_str()).unwrap_or("Unknown");
+    
+    // Get user dossier from DB
+    let dossier = match db::get_user_dossier(&state.db_pool, user_id).await {
+        Ok(d) => d,
+        Err(e) => {
+            log::error!("Failed to get user dossier: {}", e);
+            bot.send_message(chat_id, "❌ Ошибка при получении данных.").await?;
+            return Ok(());
+        }
+    };
+    
+    // If no data found
+    if dossier.message_count == 0 {
+        bot.send_message(chat_id, format!(
+            "📋 <b>Досье: {}</b>\n\n\
+            🤷 Я пока ничего о тебе не знаю.\n\
+            Напиши мне что-нибудь, и я начну запоминать!",
+            user_name
+        ))
+        .parse_mode(ParseMode::Html)
+        .await?;
+        return Ok(());
+    }
+    
+    // Show typing indicator
+    let mut typing = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
+    if let Some(tid) = thread_id {
+        typing = typing.message_thread_id(tid);
+    }
+    let _ = typing.await;
+    
+    // Get recent messages for LLM analysis
+    let recent_messages = db::get_user_recent_messages(&state.db_pool, user_id, 30)
+        .await
+        .unwrap_or_default();
+    
+    // Format dates
+    let first_seen = dossier.first_seen
+        .map(|d| d.format("%d.%m.%Y").to_string())
+        .unwrap_or_else(|| "—".to_string());
+    let last_seen = dossier.last_seen
+        .map(|d| d.format("%d.%m.%Y").to_string())
+        .unwrap_or_else(|| "—".to_string());
+    
+    // Build profile via LLM if we have enough messages
+    let profile_text = if recent_messages.len() >= 3 {
+        let messages_for_analysis: String = recent_messages.iter()
+            .filter_map(|m| m.text.as_ref())
+            .take(25)
+            .map(|t| format!("- {}", t))
+            .collect::<Vec<_>>()
+            .join("\n");
+        
+        let analysis_prompt = format!(
+            r#"Проанализируй сообщения пользователя и составь краткое досье (3-5 пунктов).
+
+Определи:
+- Основные интересы и темы разговоров
+- Стиль общения (формальный/неформальный, эмоциональный/сдержанный)
+- Возможную сферу деятельности или хобби
+- Характерные особенности
+
+Сообщения пользователя:
+{}
+
+Ответь кратко, по пунктам, без вступлений. Формат:
+• [пункт 1]
+• [пункт 2]
+..."#,
+            messages_for_analysis
+        );
+        
+        match state.llm_client.generate(
+            &state.config.ollama_chat_model,
+            &analysis_prompt,
+            0.3, // Low temperature for factual analysis
+            512,
+        ).await {
+            Ok(analysis) => analysis.trim().to_string(),
+            Err(e) => {
+                log::error!("Failed to generate user profile: {}", e);
+                "Не удалось проанализировать".to_string()
+            }
+        }
+    } else {
+        "Недостаточно данных для анализа (нужно минимум 3 сообщения)".to_string()
+    };
+    
+    let response = format!(
+        "📋 <b>Досье: {}</b>\n\n\
+        🆔 ID: <code>{}</code>\n\
+        📅 Знакомы с: {}\n\
+        🕐 Последний контакт: {}\n\n\
+        📊 <b>Статистика:</b>\n\
+        💬 Сообщений: {} | 🧠 В памяти: {} | 📍 Чатов: {}\n\n\
+        🔍 <b>Что я о тебе знаю:</b>\n{}",
+        user_name,
+        user_id,
+        first_seen,
+        last_seen,
+        dossier.message_count,
+        dossier.memory_count,
+        dossier.chats_count,
+        profile_text
+    );
+    
+    bot.send_message(chat_id, response)
+        .parse_mode(ParseMode::Html)
+        .await?;
+    
     Ok(())
 }

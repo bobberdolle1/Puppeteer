@@ -982,3 +982,139 @@ pub async fn get_memory_count(pool: &SqlitePool, chat_id: i64) -> Result<i64, sq
     .await?;
     Ok(count)
 }
+
+
+// --- User Dossier Functions ---
+
+/// User profile/dossier data
+#[derive(Debug, Clone)]
+pub struct UserDossier {
+    pub user_id: i64,
+    pub username: Option<String>,
+    pub first_seen: Option<NaiveDateTime>,
+    pub last_seen: Option<NaiveDateTime>,
+    pub message_count: i64,
+    pub memory_count: i64,
+    pub chats_count: i64,
+}
+
+/// Get user dossier (profile info based on stored messages)
+pub async fn get_user_dossier(pool: &SqlitePool, user_id: i64) -> Result<UserDossier, sqlx::Error> {
+    let row = sqlx::query(
+        r#"
+        SELECT 
+            user_id,
+            MAX(username) as username,
+            MIN(sent_at) as first_seen,
+            MAX(sent_at) as last_seen,
+            COUNT(*) as message_count,
+            COUNT(DISTINCT chat_id) as chats_count
+        FROM messages
+        WHERE user_id = ?
+        GROUP BY user_id
+        "#,
+    )
+    .bind(user_id)
+    .map(|row: SqliteRow| {
+        (
+            row.get::<Option<i64>, _>("user_id"),
+            row.get::<Option<String>, _>("username"),
+            row.get::<Option<NaiveDateTime>, _>("first_seen"),
+            row.get::<Option<NaiveDateTime>, _>("last_seen"),
+            row.get::<i64, _>("message_count"),
+            row.get::<i64, _>("chats_count"),
+        )
+    })
+    .fetch_optional(pool)
+    .await?;
+
+    match row {
+        Some((_, username, first_seen, last_seen, message_count, chats_count)) => {
+            // Count memory chunks for this user
+            let memory_count: i64 = sqlx::query(
+                r#"
+                SELECT COUNT(*) as cnt 
+                FROM memory_chunks mc
+                JOIN messages m ON m.id = mc.message_id
+                WHERE m.user_id = ?
+                "#
+            )
+            .bind(user_id)
+            .map(|row: SqliteRow| row.get("cnt"))
+            .fetch_one(pool)
+            .await?;
+
+            Ok(UserDossier {
+                user_id,
+                username,
+                first_seen,
+                last_seen,
+                message_count,
+                memory_count,
+                chats_count,
+            })
+        }
+        None => Ok(UserDossier {
+            user_id,
+            username: None,
+            first_seen: None,
+            last_seen: None,
+            message_count: 0,
+            memory_count: 0,
+            chats_count: 0,
+        }),
+    }
+}
+
+/// Get recent messages from a user (for context)
+pub async fn get_user_recent_messages(
+    pool: &SqlitePool,
+    user_id: i64,
+    limit: u32,
+) -> Result<Vec<DbMessage>, sqlx::Error> {
+    sqlx::query(
+        r#"
+        SELECT id, message_id, chat_id, user_id, username, text, sent_at
+        FROM messages
+        WHERE user_id = ? AND text IS NOT NULL AND text != ''
+        ORDER BY sent_at DESC
+        LIMIT ?
+        "#,
+    )
+    .bind(user_id)
+    .bind(limit)
+    .map(|row: SqliteRow| DbMessage {
+        id: row.get("id"),
+        message_id: row.get("message_id"),
+        chat_id: row.get("chat_id"),
+        user_id: row.get("user_id"),
+        username: row.get("username"),
+        text: row.get("text"),
+        sent_at: row.get("sent_at"),
+    })
+    .fetch_all(pool)
+    .await
+}
+
+/// Get user's memory chunks (what the bot remembers)
+pub async fn get_user_memories(
+    pool: &SqlitePool,
+    user_id: i64,
+    limit: u32,
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query(
+        r#"
+        SELECT mc.chunk_text
+        FROM memory_chunks mc
+        JOIN messages m ON m.id = mc.message_id
+        WHERE m.user_id = ?
+        ORDER BY mc.created_at DESC
+        LIMIT ?
+        "#,
+    )
+    .bind(user_id)
+    .bind(limit)
+    .map(|row: SqliteRow| row.get("chunk_text"))
+    .fetch_all(pool)
+    .await
+}
