@@ -1,4 +1,5 @@
 use crate::db;
+use crate::logging;
 use crate::state::{AppState, DialogueState, PendingBatch, WizardState};
 use teloxide::prelude::*;
 use teloxide::types::{ParseMode, ReplyParameters};
@@ -17,7 +18,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     // Check for GIF (animation), video_note (circle video), or voice message
     let media_description = if let Some(animation) = msg.animation() {
         if state.config.vision_enabled {
-            log::info!("Received GIF in chat {}", chat_id);
+            tracing::debug!(target: "media", "GIF received in chat {}", chat_id);
             
             // Show typing indicator
             let mut typing = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
@@ -34,7 +35,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
             ).await {
                 Ok(desc) => Some(desc),
                 Err(e) => {
-                    log::error!("Failed to process GIF: {}", e);
+                    logging::log_error("GIF processing", &e);
                     None
                 }
             }
@@ -44,7 +45,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     } else if let Some(video_note) = msg.video_note() {
         // Video notes can be processed with voice OR vision (or both)
         if state.config.vision_enabled || state.config.voice_enabled {
-            log::info!("Received video_note in chat {}", chat_id);
+            tracing::debug!(target: "media", "Video note received in chat {}", chat_id);
             
             // Show typing indicator
             let mut typing = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
@@ -60,7 +61,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
             ).await {
                 Ok(desc) => Some(desc),
                 Err(e) => {
-                    log::error!("Failed to process video_note: {}", e);
+                    logging::log_error("Video note processing", &e);
                     None
                 }
             }
@@ -70,7 +71,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     } else if let Some(voice) = msg.voice() {
         // Voice messages - transcribe with Whisper
         if state.config.voice_enabled {
-            log::info!("Received voice message in chat {}", chat_id);
+            tracing::debug!(target: "media", "Voice message received in chat {}", chat_id);
             
             // Show typing indicator
             let mut typing = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
@@ -82,7 +83,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
             match process_voice_message(&bot, &state, &voice.file.id.0).await {
                 Ok(transcript) => Some(format!("[Голосовое сообщение]: {}", transcript)),
                 Err(e) => {
-                    log::error!("Failed to process voice message: {}", e);
+                    logging::log_error("Voice processing", &e);
                     None
                 }
             }
@@ -148,7 +149,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     let active_persona = db::get_active_persona(&state.db_pool)
         .await
         .unwrap_or_else(|e| {
-            log::error!("Failed to get active persona: {}", e);
+            logging::log_error("Persona fetch", &e.to_string());
             None
         });
     
@@ -168,7 +169,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     // --- Get Chat Settings ---
     let chat_settings = db::get_or_create_chat_settings(&state.db_pool, chat_id.0).await
         .unwrap_or_else(|e| {
-            log::error!("Failed to get chat settings: {}", e);
+            tracing::warn!(target: "db", "Failed to get chat settings: {}", e);
             // Return default settings if there's an error
             db::ChatSettings {
                 chat_id: chat_id.0,
@@ -263,7 +264,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     // Check user rate limit (5 responses per minute)
     let user_id = msg.from.as_ref().map(|u| u.id.0).unwrap_or(0);
     if !state.check_user_rate_limit(user_id).await {
-        log::debug!("User {} rate limited", user_id);
+        tracing::debug!(target: "rate_limit", "User {} rate limited", user_id);
         return Ok(());
     }
 
@@ -291,7 +292,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         // If this is not the first message in batch, just add and return
         // The first message handler will process all
         if batch.messages.len() > 1 {
-            log::debug!("Added message to batch for {:?}, total: {}", batch_key, batch.messages.len());
+            tracing::debug!(target: "batch", "Added to batch {:?}, total: {}", batch_key, batch.messages.len());
             return Ok(());
         }
     }
@@ -337,7 +338,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         .unwrap_or(&bot_name);
     let prompt = build_prompt(persona_prompt, long_term_memories, short_term_history, effective_name);
 
-    log::debug!("Prompt for chat {}: {}", chat_id, prompt);
+    tracing::trace!(target: "llm", "Prompt for chat {}: {} chars", chat_id, prompt.len());
 
     // --- Show typing indicator ---
     let mut typing_action = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
@@ -347,6 +348,10 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
     let _ = typing_action.await;
 
     // --- Generate Response ---
+    let user_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "User".to_string());
+    let text_preview = combined_text.chars().take(50).collect::<String>();
+    logging::log_message_received(chat_id.0, &user_name, &text_preview, media_description.is_some());
+    
     let start_time = std::time::Instant::now();
     match state.llm_client.generate(&state.config.ollama_chat_model, &prompt, state.config.temperature, state.config.max_tokens).await {
         Ok(response_text) => {
@@ -355,7 +360,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
             // Apply human-like behavior rules
             let processed_response = apply_human_behavior_rules(response_text, &state.config.bot_name);
 
-            log::info!("LLM response for chat {}: {} (took {}ms)", chat_id, processed_response, response_time);
+            tracing::debug!(target: "messages", "Response for chat {} in {}ms", chat_id, response_time);
             
             // Try to send with MarkdownV2, fallback to plain text if parsing fails
             let escaped = escape_markdown_v2(&processed_response);
@@ -374,7 +379,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
                 Ok(msg) => Some(msg),
                 Err(_) => {
                     // Markdown parsing failed, try plain text
-                    log::debug!("Markdown parsing failed, sending as plain text");
+                    tracing::debug!(target: "messages", "Markdown failed, using plain text");
                     let mut plain_req = bot.send_message(chat_id, &processed_response)
                         .reply_parameters(ReplyParameters::new(msg.id));
                     if let Some(tid) = thread_id {
@@ -391,7 +396,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         }
         Err(e) => {
             let response_time = start_time.elapsed().as_millis();
-            log::error!("Failed to get response from LLM after {}ms: {}", response_time, e);
+            logging::log_error("LLM generation", &format!("Failed after {}ms: {}", response_time, e));
             let mut err_req = bot.send_message(chat_id, "Не удалось сгенерировать ответ.")
                 .reply_parameters(ReplyParameters::new(msg.id));
             if let Some(tid) = thread_id {
@@ -439,13 +444,13 @@ async fn retrieve_memories(state: &AppState, chat_id: ChatId, text: &str) -> Vec
             match db::find_similar_chunks(&state.db_pool, chat_id.0, &embedding, MAX_RAG_CHUNKS).await {
                 Ok(chunks) => chunks,
                 Err(e) => {
-                    log::error!("Failed to retrieve RAG chunks: {}", e);
+                    tracing::warn!(target: "rag", "Failed to retrieve chunks: {}", e);
                     vec![]
                 }
             }
         }
         Err(e) => {
-            log::error!("Failed to generate embeddings for RAG: {}", e);
+            tracing::warn!(target: "rag", "Failed to generate embeddings: {}", e);
             vec![]
         }
     }
@@ -460,7 +465,7 @@ async fn save_and_embed_message(state: &AppState, msg: &Message) {
             if let Ok(db_id) = db::save_message(&state.db_pool, &msg).await {
                 if let Ok(embedding) = state.llm_client.generate_embeddings(&state.config.ollama_embedding_model, &text).await {
                     if let Err(e) = db::save_embedding(&state.db_pool, db_id, &text, &embedding).await {
-                        log::error!("Failed to save embedding: {}", e);
+                        tracing::warn!(target: "db", "Failed to save embedding: {}", e);
                     }
                 }
             }
@@ -567,13 +572,14 @@ pub async fn process_voice_message(
         return Err("Voice is disabled".to_string());
     }
     
-    log::info!("Processing voice message with file_id: {}", file_id);
+    tracing::debug!(target: "voice", "Processing voice file: {}", &file_id[..8.min(file_id.len())]);
     
     // Download the voice file
     let audio_data = download_telegram_file(bot, file_id).await?;
-    log::debug!("Downloaded {} bytes of audio", audio_data.len());
+    tracing::debug!(target: "voice", "Downloaded {} bytes", audio_data.len());
     
     // Transcribe with Whisper
+    let start = std::time::Instant::now();
     let transcript = state.voice_client.transcribe(audio_data, "voice.ogg").await
         .map_err(|e| format!("Transcription failed: {}", e))?;
     
@@ -581,7 +587,7 @@ pub async fn process_voice_message(
         return Err("Empty transcription".to_string());
     }
     
-    log::info!("Voice transcription: {}", transcript);
+    logging::log_voice_transcription(start.elapsed().as_millis() as u64, &transcript);
     Ok(transcript)
 }
 
@@ -596,15 +602,15 @@ pub async fn process_animation(
         return Err("Vision is disabled".to_string());
     }
     
-    log::info!("Processing GIF with file_id: {}", file_id);
+    tracing::debug!(target: "vision", "Processing GIF: {}", &file_id[..8.min(file_id.len())]);
     
     // Download the file
     let video_data = download_telegram_file(bot, file_id).await?;
-    log::debug!("Downloaded {} bytes", video_data.len());
+    tracing::debug!(target: "vision", "Downloaded {} bytes", video_data.len());
     
     // Extract frames
     let frames = extract_frames_from_video(&video_data).await?;
-    log::info!("Extracted {} frames from GIF", frames.len());
+    tracing::debug!(target: "vision", "Extracted {} frames", frames.len());
     
     // Convert frames to base64
     let images_base64: Vec<String> = frames.iter()
@@ -687,11 +693,11 @@ pub async fn process_video_note(
     state: &AppState,
     file_id: &str,
 ) -> Result<String, String> {
-    log::info!("Processing video_note with file_id: {}", file_id);
+    tracing::debug!(target: "media", "Processing video_note: {}", &file_id[..8.min(file_id.len())]);
     
     // Download the file
     let video_data = download_telegram_file(bot, file_id).await?;
-    log::debug!("Downloaded {} bytes", video_data.len());
+    tracing::debug!(target: "media", "Downloaded {} bytes", video_data.len());
     
     let mut result_parts: Vec<String> = Vec::new();
     
@@ -699,22 +705,23 @@ pub async fn process_video_note(
     if state.config.voice_enabled {
         match extract_audio_from_video(&video_data).await {
             Ok(audio_data) => {
-                log::info!("Extracted audio ({} bytes), transcribing...", audio_data.len());
+                tracing::debug!(target: "voice", "Extracted audio ({} bytes)", audio_data.len());
+                let start = std::time::Instant::now();
                 match state.voice_client.transcribe(audio_data, "video_note.ogg").await {
                     Ok(transcript) if !transcript.trim().is_empty() => {
-                        log::info!("Transcription: {}", transcript);
+                        logging::log_voice_transcription(start.elapsed().as_millis() as u64, &transcript);
                         result_parts.push(format!("🎤 Сказано: {}", transcript.trim()));
                     }
                     Ok(_) => {
-                        log::debug!("Empty transcription");
+                        tracing::debug!(target: "voice", "Empty transcription");
                     }
                     Err(e) => {
-                        log::warn!("Transcription failed: {}", e);
+                        tracing::debug!(target: "voice", "Transcription failed: {}", e);
                     }
                 }
             }
             Err(e) => {
-                log::warn!("Audio extraction failed: {}", e);
+                tracing::debug!(target: "media", "Audio extraction failed: {}", e);
             }
         }
     }
@@ -723,7 +730,7 @@ pub async fn process_video_note(
     if state.config.vision_enabled {
         match extract_frames_from_video(&video_data).await {
             Ok(frames) => {
-                log::info!("Extracted {} frames", frames.len());
+                tracing::debug!(target: "vision", "Extracted {} frames", frames.len());
                 
                 let images_base64: Vec<String> = frames.iter()
                     .map(|f| BASE64.encode(f))
@@ -743,12 +750,12 @@ pub async fn process_video_note(
                         result_parts.push(format!("👁 Видно: {}", description.trim()));
                     }
                     Err(e) => {
-                        log::warn!("Vision analysis failed: {}", e);
+                        tracing::debug!(target: "vision", "Vision analysis failed: {}", e);
                     }
                 }
             }
             Err(e) => {
-                log::warn!("Frame extraction failed: {}", e);
+                tracing::debug!(target: "media", "Frame extraction failed: {}", e);
             }
         }
     }
@@ -1121,7 +1128,7 @@ async fn handle_wizard_input(bot: Bot, msg: Message, state: AppState, wizard_sta
                     .await?;
                 }
                 Err(e) => {
-                    log::error!("Failed to create persona: {}", e);
+                    tracing::warn!(target: "db", "Failed to create persona: {}", e);
                     state.clear_wizard_state(chat_id).await;
                     bot.send_message(chat_id, "❌ Ошибка при создании персоны.").await?;
                 }
@@ -1245,7 +1252,7 @@ async fn handle_wizard_input(bot: Bot, msg: Message, state: AppState, wizard_sta
                     .await?;
                 }
                 Err(e) => {
-                    log::error!("Failed to update persona: {}", e);
+                    tracing::warn!(target: "db", "Failed to update persona: {}", e);
                     state.clear_wizard_state(chat_id).await;
                     bot.send_message(chat_id, "❌ Ошибка при обновлении персоны.").await?;
                 }

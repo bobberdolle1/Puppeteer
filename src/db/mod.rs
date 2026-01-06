@@ -475,7 +475,7 @@ pub async fn find_similar_chunks(
                         Some((similarity, chunk.chunk_text))
                     }
                     Err(e) => {
-                        log::error!("Failed to deserialize embedding for chunk {}: {}", chunk.id, e);
+                        tracing::warn!(target: "db", "Failed to deserialize embedding for chunk {}: {}", chunk.id, e);
                         None
                     }
                 }
@@ -606,7 +606,7 @@ pub async fn find_similar_chunks_with_decay(
                         Some((final_score, chunk.chunk_text))
                     }
                     Err(e) => {
-                        log::error!("Failed to deserialize embedding: {}", e);
+                        tracing::warn!(target: "db", "Failed to deserialize embedding: {}", e);
                         None
                     }
                 }
@@ -827,7 +827,7 @@ pub async fn import_personas(pool: &SqlitePool, json: &str) -> Result<Vec<i64>, 
             export.triggers.as_deref(),
         ).await {
             Ok(id) => ids.push(id),
-            Err(e) => log::warn!("Failed to import persona '{}': {}", export.name, e),
+            Err(e) => tracing::warn!(target: "db", "Failed to import persona '{}': {}", export.name, e),
         }
     }
     Ok(ids)

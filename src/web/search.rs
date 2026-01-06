@@ -114,7 +114,7 @@ impl WebSearchClient {
     pub async fn search_for_context(&self, query: &str, max_results: usize) -> String {
         // Generate multiple search queries for better coverage
         let queries = self.generate_search_queries(query);
-        log::debug!("🔍 Web search queries: {:?}", queries);
+        tracing::debug!(target: "web", "🔍 Search queries: {:?}", queries);
         
         let mut all_results: Vec<SearchResult> = Vec::new();
         let mut seen_snippets: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -126,7 +126,7 @@ impl WebSearchClient {
         for (i, result) in results.into_iter().enumerate() {
             match result {
                 Ok(search_results) => {
-                    log::debug!("🔍 Query {} returned {} results", i + 1, search_results.len());
+                    tracing::debug!(target: "web", "Query {} returned {} results", i + 1, search_results.len());
                     for r in search_results {
                         // Deduplicate by snippet content (first 100 chars)
                         let snippet_key: String = r.snippet.chars().take(100).collect();
@@ -137,17 +137,17 @@ impl WebSearchClient {
                     }
                 }
                 Err(e) => {
-                    log::warn!("🔍 Query {} failed: {}", i + 1, e);
+                    tracing::warn!(target: "web", "Query {} failed: {}", i + 1, e);
                 }
             }
         }
         
         if all_results.is_empty() {
-            log::debug!("🔍 No web results found for: {}", query);
+            tracing::debug!(target: "web", "No results found for: {}", query);
             return String::new();
         }
         
-        log::info!("🌐 Web search: {} unique results for '{}'", all_results.len(), query);
+        crate::logging::log_web_search(query, all_results.len());
         
         let mut context = format!("### Результаты веб-поиска по '{}':\n\n", query);
         for (i, result) in all_results.into_iter().take(max_results).enumerate() {

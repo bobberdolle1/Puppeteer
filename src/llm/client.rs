@@ -1,3 +1,4 @@
+use crate::logging;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -108,7 +109,7 @@ impl LlmClient {
             },
         };
 
-        log::debug!("🤖 LLM request to {} (prompt: {} chars)", model, prompt.len());
+        logging::log_llm_request(model, prompt.len());
 
         let response = self
             .client
@@ -120,13 +121,13 @@ impl LlmClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            log::error!("❌ LLM API error: {} - {}", status, body);
+            logging::log_error("LLM API", &format!("HTTP {}: {}", status, body));
             return Err(LlmError::InvalidResponse(format!("HTTP {}: {}", status, body)));
         }
 
         let response_body = response.json::<GenerateResponse>().await?;
         let duration = start_time.elapsed();
-        log::info!("✅ LLM response in {}ms ({} chars)", duration.as_millis(), response_body.response.len());
+        logging::log_llm_response(duration.as_millis() as u64, response_body.response.len());
         Ok(response_body.response)
     }
 
@@ -139,7 +140,7 @@ impl LlmClient {
         max_tokens: u32,
         timeout_secs: u64,
     ) -> Result<String, LlmError> {
-        log::debug!("⏱️ LLM timeout set to {}s", timeout_secs);
+        tracing::debug!(target: "llm", "⏱️ LLM timeout set to {}s", timeout_secs);
         match tokio::time::timeout(
             Duration::from_secs(timeout_secs),
             self.generate(model, prompt, temperature, max_tokens),
@@ -148,7 +149,7 @@ impl LlmClient {
         {
             Ok(result) => result,
             Err(_) => {
-                log::error!("⏱️ LLM generation timed out after {}s", timeout_secs);
+                logging::log_error("LLM", &format!("Generation timed out after {}s", timeout_secs));
                 Err(LlmError::Timeout)
             }
         }
@@ -165,6 +166,7 @@ impl LlmClient {
     ) -> Result<String, LlmError> {
         let start_time = std::time::Instant::now();
         let request_url = format!("{}/api/generate", self.url);
+        let frame_count = images_base64.len();
         let request_body = VisionRequest {
             model,
             prompt,
@@ -186,13 +188,13 @@ impl LlmClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            log::error!("Vision API error: {} - {}", status, body);
+            logging::log_error("Vision API", &format!("HTTP {}: {}", status, body));
             return Err(LlmError::InvalidResponse(format!("HTTP {}: {}", status, body)));
         }
 
         let response_body = response.json::<GenerateResponse>().await?;
         let duration = start_time.elapsed();
-        log::info!("Vision generation completed in {}ms", duration.as_millis());
+        logging::log_vision_analysis(duration.as_millis() as u64, frame_count);
         Ok(response_body.response)
     }
 
@@ -219,7 +221,7 @@ impl LlmClient {
 
         let response_body = response.json::<EmbeddingResponse>().await?;
         let duration = start_time.elapsed();
-        log::info!("Embedding generation completed in {}ms", duration.as_millis());
+        logging::log_embedding(duration.as_millis() as u64);
         Ok(response_body.embedding)
     }
 
@@ -230,12 +232,12 @@ impl LlmClient {
         match self.client.get(&request_url).send().await {
             Ok(response) => {
                 let duration = start_time.elapsed();
-                log::info!("Ollama health check completed in {}ms", duration.as_millis());
+                tracing::debug!(target: "llm", "Health check completed in {}ms", duration.as_millis());
                 Ok(response.status().is_success())
             }
             Err(e) => {
                 let duration = start_time.elapsed();
-                log::info!("Ollama health check failed after {}ms: {}", duration.as_millis(), e);
+                tracing::debug!(target: "llm", "Health check failed after {}ms: {}", duration.as_millis(), e);
                 Ok(false)
             }
         }

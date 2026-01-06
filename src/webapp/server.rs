@@ -89,8 +89,7 @@ pub async fn start_webapp_server(state: AppState, port: u16) {
     let app = create_router(state.clone());
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
     
-    log::info!("🌐 WebApp server starting on http://0.0.0.0:{}", port);
-    log::info!("   └─ API: http://localhost:{}/api/status", port);
+    tracing::info!(target: "webapp", "🌐 API available at http://localhost:{}/api/status", port);
     
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

@@ -13,6 +13,7 @@ axum = { version = "*", features = ["macros"] }
 base64 = "*"
 bincode = "1"
 chrono = { version = "*", features = ["serde"] }
+colored = "2"
 dotenv = "*"
 envy = "*"
 futures = "*"
@@ -20,7 +21,8 @@ hex = "*"
 hmac = "*"
 log = "*"
 mime_guess = "*"
-pretty_env_logger = "*"
+nu-ansi-term = "0.50"
+once_cell = "1"
 rand = "*"
 reqwest = { version = "*", features = ["json", "multipart"] }
 rust-embed = { version = "*", features = ["axum"] }
@@ -31,4 +33,6 @@ sqlx = { version = "*", features = ["runtime-tokio", "tls-rustls-ring-webpki", "
 teloxide = { version = "*", features = ["macros"] }
 tokio = { version = "*", features = ["full"] }
 tower-http = { version = "*", features = ["cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"] }
 urlencoding = "*"
