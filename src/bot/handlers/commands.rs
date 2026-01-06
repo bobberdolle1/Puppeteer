@@ -10,17 +10,54 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
     let user_id = msg.from.as_ref().map(|u| u.id.0);
     let username = msg.from.as_ref().map(|u| u.first_name.as_str()).unwrap_or("Unknown");
 
+    // Parse command and check if it's for this bot
+    let cmd_full = text.split_whitespace().next().unwrap_or("");
+    let (cmd, target_bot) = if let Some(at_pos) = cmd_full.find('@') {
+        (&cmd_full[..at_pos], Some(&cmd_full[at_pos + 1..]))
+    } else {
+        (cmd_full, None)
+    };
+
+    // In group chats, ignore commands targeted at other bots
+    if !msg.chat.is_private() {
+        if let Some(target) = target_bot {
+            let bot_username = state.get_bot_username().await;
+            if bot_username.as_ref().map(|u| u.as_str()) != Some(target) {
+                // Command is for another bot, ignore silently
+                return Ok(());
+            }
+        }
+    }
+
+    // List of known commands
+    let known_commands = [
+        "/start", "/cancel", "/create_persona", "/list_personas", "/activate_persona",
+        "/update_persona", "/delete_persona", "/set_model", "/set_temperature", "/set_max_tokens",
+        "/enable_rag", "/disable_rag", "/set_memory_depth", "/status", "/enable_auto_reply",
+        "/disable_auto_reply", "/reply_to_all", "/reply_to_mention", "/set_cooldown",
+        "/menu", "/settings", "/help", "/triggers", "/keywords", "/broadcast",
+        "/queue_stats", "/stats", "/models", "/export_persona", "/export_all_personas",
+        "/import_persona", "/block", "/unblock", "/security_status"
+    ];
+
+    // In group chats, ignore unknown commands (they might be for other bots)
+    if !msg.chat.is_private() && !known_commands.contains(&cmd) {
+        return Ok(());
+    }
+
     log::info!("⚡ Command from {} ({}): {}", username, user_id.unwrap_or(0), text);
 
     // /start доступен всем
-    let cmd = text.split_whitespace().next().unwrap_or("");
     if cmd == "/start" {
         return handle_start(bot, msg, &state).await;
     }
 
     // Остальные команды только для владельца
     if user_id != Some(state.config.owner_id) {
-        bot.send_message(chat_id, "❌ У вас нет прав для выполнения этой команды.").await?;
+        // In groups, don't spam about permissions for unknown users
+        if msg.chat.is_private() {
+            bot.send_message(chat_id, "❌ У вас нет прав для выполнения этой команды.").await?;
+        }
         return Ok(());
     }
 
@@ -61,7 +98,10 @@ pub async fn handle_command(bot: Bot, msg: Message, state: AppState) -> Response
         "/unblock" => handle_unblock_user(bot, msg, &state).await,
         "/security_status" => handle_security_status(bot, msg, &state).await,
         _ => {
-            bot.send_message(chat_id, "❌ Неизвестная команда. /help").await?;
+            // Only respond to unknown commands in private chats
+            if msg.chat.is_private() {
+                bot.send_message(chat_id, "❌ Неизвестная команда. /help").await?;
+            }
             Ok(())
         }
     }
