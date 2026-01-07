@@ -146,7 +146,11 @@ pub async fn handle_list_personas(bot: Bot, msg: Message, state: &AppState) -> R
             let mut text = "📋 <b>Персоны:</b>\n\n".to_string();
             for p in personas {
                 let status = if p.is_active { "🟢" } else { "⚪" };
-                let preview = if p.prompt.len() > 80 { format!("{}...", &p.prompt[..80]) } else { p.prompt.clone() };
+                let preview = if p.prompt.chars().count() > 80 { 
+                    format!("{}...", p.prompt.chars().take(80).collect::<String>()) 
+                } else { 
+                    p.prompt.clone() 
+                };
                 text.push_str(&format!("{} <b>{}</b> (ID: {})\n<i>{}</i>\n\n", status, p.name, p.id, preview));
             }
             bot.send_message(chat_id, text).parse_mode(ParseMode::Html).await?;

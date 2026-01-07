@@ -5,5 +5,8 @@
 ALTER TABLE personas ADD COLUMN display_name TEXT;
 ALTER TABLE personas ADD COLUMN triggers TEXT;
 
--- Update existing personas with their names as display_name
-UPDATE personas SET display_name = name WHERE display_name IS NULL;
+-- Don't set display_name for Default persona - it should use bot's name
+-- Only set display_name for personas that have a specific character name
+UPDATE personas SET display_name = 'Чувак' WHERE name = 'Чувак';
+UPDATE personas SET display_name = 'Сократ' WHERE name = 'Сократ';
+UPDATE personas SET display_name = 'Бро' WHERE name = 'Бро';

@@ -289,7 +289,11 @@ pub fn print_shutdown() {
 pub fn log_message_received(chat_id: i64, user: &str, text_preview: &str, has_media: bool) {
     METRICS.messages_processed.fetch_add(1, Ordering::Relaxed);
     let media_badge = if has_media { " 📎" } else { "" };
-    let preview = if text_preview.len() > 50 { format!("{}...", &text_preview[..47]) } else { text_preview.to_string() };
+    let preview = if text_preview.chars().count() > 50 { 
+        format!("{}...", text_preview.chars().take(47).collect::<String>()) 
+    } else { 
+        text_preview.to_string() 
+    };
     tracing::info!(target: "messages", "💬 {} in {}{}: \"{}\"", Color::Cyan.paint(user), Color::Yellow.paint(chat_id.to_string()), media_badge, Color::White.paint(preview));
 }
 

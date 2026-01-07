@@ -5,6 +5,7 @@ use persona_forge::bot::handlers::callbacks::handle_callback_query;
 use persona_forge::webapp::start_webapp_server;
 use sqlx::sqlite::SqlitePoolOptions;
 use teloxide::prelude::*;
+use teloxide::requests::Requester;
 
 #[tokio::main]
 async fn main() {
@@ -115,12 +116,17 @@ async fn main() {
         .branch(Update::filter_message().endpoint(persona_forge::bot::handlers::messages::handle_message))
         .branch(Update::filter_callback_query().endpoint(handle_callback_query));
 
+    // Drop pending updates before starting
+    if let Err(e) = bot.delete_webhook().drop_pending_updates(true).await {
+        tracing::warn!("Failed to drop pending updates: {}", e);
+    }
+
     let mut dispatcher = Dispatcher::builder(bot, handler)
         .dependencies(dptree::deps![app_state])
         .enable_ctrlc_handler()
+        .default_handler(|_| async {})
         .build();
 
-    // Run dispatcher
     dispatcher.dispatch().await;
 
     // Print shutdown stats

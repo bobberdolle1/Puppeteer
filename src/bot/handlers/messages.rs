@@ -90,6 +90,33 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         } else {
             None
         }
+    } else if let Some(photos) = msg.photo() {
+        // Photo messages - analyze with vision model
+        if state.config.vision_enabled {
+            tracing::debug!(target: "media", "Photo received in chat {}", chat_id);
+            
+            // Show typing indicator
+            let mut typing = bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing);
+            if let Some(tid) = thread_id {
+                typing = typing.message_thread_id(tid);
+            }
+            let _ = typing.await;
+            
+            // Get the largest photo (last in array)
+            if let Some(photo) = photos.last() {
+                match process_photo(&bot, &state, &photo.file.id.0, msg.caption()).await {
+                    Ok(desc) => Some(desc),
+                    Err(e) => {
+                        logging::log_error("Photo processing", &e);
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -166,7 +193,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         .and_then(|p| p.triggers.as_ref())
         .map(|t| t.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect());
 
-    // --- Get Chat Settings ---
+    // --- Get Chat Settings (for per-chat options like RAG, cooldown) ---
     let chat_settings = db::get_or_create_chat_settings(&state.db_pool, chat_id.0).await
         .unwrap_or_else(|e| {
             tracing::warn!(target: "db", "Failed to get chat settings: {}", e);
@@ -181,7 +208,13 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
             }
         });
 
-    // Check if auto-reply is enabled
+    // Get GLOBAL reply mode from runtime_config (not per-chat)
+    let global_reply_mode = db::get_config(&state.db_pool, "reply_mode").await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "mention_only".to_string());
+
+    // Check if auto-reply is enabled (still per-chat)
     if !chat_settings.auto_reply_enabled {
         return Ok(());
     }
@@ -229,22 +262,34 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         chat_triggered || persona_triggered
     };
     
-    let should_reply = if is_private || is_reply_to_bot || is_mentioned_by_name || is_triggered || has_media {
-        // Always reply: private chat, reply to bot, mention, trigger, or media
+    let should_reply = if is_private || is_reply_to_bot || is_mentioned_by_name || is_triggered {
+        // Always reply: private chat, reply to bot, mention, or trigger
+        tracing::info!(target: "auto_reply", "Chat {} will reply: private={}, reply_to_bot={}, mentioned={} (name='{}'), triggered={}", 
+            chat_id, is_private, is_reply_to_bot, is_mentioned_by_name, effective_name, is_triggered);
         true
-    } else if chat_settings.reply_mode == "all_messages" {
+    } else if has_media && global_reply_mode == "all_messages" {
+        // Media only triggers reply in "all_messages" mode
+        true
+    } else if global_reply_mode == "all_messages" {
         // In "all_messages" mode, reply with probability
         use rand::Rng;
         let probability = db::get_config_f64(&state.db_pool, "random_reply_probability", state.config.random_reply_probability).await;
+        tracing::info!(target: "auto_reply", "Chat {} mode=all_messages, probability={}", chat_id, probability);
         if probability <= 0.0 {
+            tracing::info!(target: "auto_reply", "Skipping: probability is 0");
             false
         } else if probability >= 1.0 {
+            tracing::info!(target: "auto_reply", "Replying: probability is 100%");
             true
         } else {
-            rand::rng().random::<f64>() < probability
+            let roll = rand::rng().random::<f64>();
+            let will_reply = roll < probability;
+            tracing::info!(target: "auto_reply", "Roll: {:.3} < {:.3} = {}", roll, probability, will_reply);
+            will_reply
         }
     } else {
         // For "mention_only" mode, check if bot is mentioned by @username
+        tracing::info!(target: "auto_reply", "Chat {} mode=mention_only, checking @username", chat_id);
         let bot_info = bot.get_me().await;
         if let Ok(me) = bot_info {
             let username = me.user.username.as_deref().unwrap_or("");
@@ -257,6 +302,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
 
     if !should_reply {
         // Still save the message for context, but don't reply
+        tracing::info!(target: "auto_reply", "Chat {} NOT replying (mode={}, prob check skipped)", chat_id, global_reply_mode);
         save_and_embed_message(&state, &msg).await;
         return Ok(());
     }
@@ -641,6 +687,50 @@ pub async fn process_animation(
     .map_err(|e| format!("Vision model error: {}", e))?;
     
     Ok(description)
+}
+
+/// Process photo and generate description
+pub async fn process_photo(
+    bot: &Bot,
+    state: &AppState,
+    file_id: &str,
+    caption: Option<&str>,
+) -> Result<String, String> {
+    if !state.config.vision_enabled {
+        return Err("Vision is disabled".to_string());
+    }
+    
+    tracing::debug!(target: "vision", "Processing photo: {}", &file_id[..8.min(file_id.len())]);
+    
+    // Download the photo
+    let photo_data = download_telegram_file(bot, file_id).await?;
+    tracing::debug!(target: "vision", "Downloaded {} bytes", photo_data.len());
+    
+    // Convert to base64
+    let image_base64 = BASE64.encode(&photo_data);
+    
+    // Build prompt for vision model
+    let prompt = if let Some(cap) = caption {
+        format!(
+            "Пользователь отправил фото с подписью: \"{}\"\n\n\
+            Опиши что на фото, учитывая подпись. Будь кратким.",
+            cap
+        )
+    } else {
+        "Пользователь отправил фото. Опиши что на нём. Будь кратким.".to_string()
+    };
+    
+    // Call vision model
+    let description = state.llm_client.generate_vision(
+        &state.config.ollama_vision_model,
+        &prompt,
+        vec![image_base64],
+        state.config.temperature,
+        state.config.max_tokens,
+    ).await
+    .map_err(|e| format!("Vision model error: {}", e))?;
+    
+    Ok(format!("[Фото]: {}", description))
 }
 
 /// Extract audio from video file using ffmpeg

@@ -143,14 +143,16 @@ pub async fn handle_callback_query(bot: Bot, q: CallbackQuery, state: AppState) 
             return Ok(());
         }
         "chat_mode_all" => {
-            let _ = db::update_reply_mode_for_chat(&state.db_pool, chat_id.0, "all_messages").await;
-            bot.answer_callback_query(q.id.clone()).text("✅ Режим: все сообщения").await?;
+            // Save to global config (applies to all chats)
+            let _ = db::set_config(&state.db_pool, "reply_mode", "all_messages").await;
+            bot.answer_callback_query(q.id.clone()).text("✅ Режим: все сообщения (глобально)").await?;
             edit_chat_menu(&bot, chat_id, msg_id, &state).await?;
             return Ok(());
         }
         "chat_mode_mention" => {
-            let _ = db::update_reply_mode_for_chat(&state.db_pool, chat_id.0, "mention_only").await;
-            bot.answer_callback_query(q.id.clone()).text("✅ Режим: упоминания").await?;
+            // Save to global config (applies to all chats)
+            let _ = db::set_config(&state.db_pool, "reply_mode", "mention_only").await;
+            bot.answer_callback_query(q.id.clone()).text("✅ Режим: упоминания (глобально)").await?;
             edit_chat_menu(&bot, chat_id, msg_id, &state).await?;
             return Ok(());
         }
@@ -167,6 +169,16 @@ pub async fn handle_callback_query(bot: Bot, q: CallbackQuery, state: AppState) 
             return Ok(());
         }
         "chat_cooldown" => edit_cooldown_menu(&bot, chat_id, msg_id).await?,
+        "chat_probability" => edit_probability_menu(&bot, chat_id, msg_id, &state).await?,
+        "chat_set_prob" => {
+            if let Some(prob) = param.and_then(|p| p.parse::<u32>().ok()) {
+                let prob_f64 = prob as f64 / 100.0;
+                let _ = db::set_config(&state.db_pool, "random_reply_probability", &prob_f64.to_string()).await;
+                bot.answer_callback_query(q.id.clone()).text(format!("✅ Вероятность: {}%", prob)).await?;
+                edit_chat_menu(&bot, chat_id, msg_id, &state).await?;
+                return Ok(());
+            }
+        }
         "chat_set_cd" => {
             if let Some(cd) = param.and_then(|p| p.parse::<i64>().ok()) {
                 let _ = db::update_cooldown_for_chat(&state.db_pool, chat_id.0, cd).await;
@@ -358,7 +370,11 @@ async fn show_personas_list_inline(bot: &Bot, chat_id: ChatId, msg_id: MessageId
         let display_name = p.display_name.as_ref()
             .map(|n| format!(" ({})", n))
             .unwrap_or_default();
-        let preview = if p.prompt.len() > 50 { format!("{}...", &p.prompt[..50]) } else { p.prompt.clone() };
+        let preview = if p.prompt.chars().count() > 50 { 
+            format!("{}...", p.prompt.chars().take(50).collect::<String>()) 
+        } else { 
+            p.prompt.clone() 
+        };
         text.push_str(&format!("{} <b>{}</b>{} (ID: {})\n<i>{}</i>\n\n", status, p.name, display_name, p.id, preview));
         
         let mut row = vec![];
@@ -581,9 +597,25 @@ async fn edit_chat_menu(bot: &Bot, chat_id: ChatId, msg_id: MessageId, state: &A
             rag_enabled: true,
         });
     
+    // Get GLOBAL reply mode from runtime_config
+    let global_reply_mode = db::get_config(&state.db_pool, "reply_mode").await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "mention_only".to_string());
+    
     let triggers = state.keyword_triggers.lock().await.get(&chat_id).cloned();
     let triggers_str = triggers.as_ref().map(|k| k.join(", ")).unwrap_or_else(|| "не заданы".to_string());
     let has_triggers = triggers.is_some() && !triggers.as_ref().unwrap().is_empty();
+    
+    // Get random reply probability
+    let probability = db::get_config_f64(&state.db_pool, "random_reply_probability", state.config.random_reply_probability).await;
+    let prob_percent = (probability * 100.0) as u32;
+    
+    let mode_str = if global_reply_mode == "all_messages" { 
+        format!("все сообщения ({}%)", prob_percent)
+    } else { 
+        "только упоминания".to_string()
+    };
     
     let text = format!(
         "💬 <b>Настройки чата</b>\n\n\
@@ -594,7 +626,7 @@ async fn edit_chat_menu(bot: &Bot, chat_id: ChatId, msg_id: MessageId, state: &A
         ⏱️ Cooldown: {}с\n\
         🎯 Триггеры: {}",
         if settings.auto_reply_enabled { "✅" } else { "❌" },
-        if settings.reply_mode == "all_messages" { "все сообщения" } else { "только упоминания" },
+        mode_str,
         if settings.rag_enabled { "✅" } else { "❌" },
         settings.context_depth,
         settings.cooldown_seconds,
@@ -610,14 +642,24 @@ async fn edit_chat_menu(bot: &Bot, chat_id: ChatId, msg_id: MessageId, state: &A
         ],
         vec![
             InlineKeyboardButton::callback(
-                if settings.reply_mode == "all_messages" { "📨 Все ✅" } else { "📨 Все" },
+                if global_reply_mode == "all_messages" { "📨 Все ✅" } else { "📨 Все" },
                 "chat_mode_all"
             ),
             InlineKeyboardButton::callback(
-                if settings.reply_mode == "mention_only" { "👤 Упом. ✅" } else { "👤 Упом." },
+                if global_reply_mode == "mention_only" { "👤 Упом. ✅" } else { "👤 Упом." },
                 "chat_mode_mention"
             ),
         ],
+    ];
+    
+    // Show probability button only in "all_messages" mode
+    if global_reply_mode == "all_messages" {
+        buttons.push(vec![
+            InlineKeyboardButton::callback(format!("🎲 Вероятность: {}%", prob_percent), "chat_probability"),
+        ]);
+    }
+    
+    buttons.extend(vec![
         vec![
             InlineKeyboardButton::callback(
                 format!("🧠 RAG {}", if settings.rag_enabled { "✅" } else { "❌" }),
@@ -629,7 +671,7 @@ async fn edit_chat_menu(bot: &Bot, chat_id: ChatId, msg_id: MessageId, state: &A
             InlineKeyboardButton::callback("⏱️ Cooldown", "chat_cooldown"),
             InlineKeyboardButton::callback("🎯 Триггеры", "chat_triggers"),
         ],
-    ];
+    ]);
     
     if has_triggers {
         buttons.push(vec![InlineKeyboardButton::callback("🗑️ Очистить триггеры", "chat_triggers_clear")]);
@@ -639,6 +681,38 @@ async fn edit_chat_menu(bot: &Bot, chat_id: ChatId, msg_id: MessageId, state: &A
     
     let kb = InlineKeyboardMarkup::new(buttons);
     bot.edit_message_text(chat_id, msg_id, text)
+        .parse_mode(ParseMode::Html)
+        .reply_markup(kb)
+        .await?;
+    Ok(())
+}
+
+async fn edit_probability_menu(bot: &Bot, chat_id: ChatId, msg_id: MessageId, state: &AppState) -> ResponseResult<()> {
+    let probability = db::get_config_f64(&state.db_pool, "random_reply_probability", state.config.random_reply_probability).await;
+    let prob_percent = (probability * 100.0) as u32;
+    
+    let probs = ["0", "10", "25", "50", "75", "100"];
+    let buttons: Vec<Vec<InlineKeyboardButton>> = probs.chunks(3).map(|chunk| {
+        chunk.iter().map(|p| {
+            let label = if p.parse::<u32>().unwrap() == prob_percent {
+                format!("{}% ✅", p)
+            } else {
+                format!("{}%", p)
+            };
+            InlineKeyboardButton::callback(label, format!("chat_set_prob:{}", p))
+        }).collect()
+    }).collect();
+    
+    let mut kb_buttons = buttons;
+    kb_buttons.push(vec![InlineKeyboardButton::callback("🔙 Назад", "chat")]);
+    
+    let kb = InlineKeyboardMarkup::new(kb_buttons);
+    bot.edit_message_text(chat_id, msg_id, format!(
+        "🎲 <b>Вероятность ответа</b>\n\n\
+        Текущая: {}%\n\n\
+        Шанс что бот ответит на случайное сообщение в режиме \"все сообщения\".",
+        prob_percent
+    ))
         .parse_mode(ParseMode::Html)
         .reply_markup(kb)
         .await?;

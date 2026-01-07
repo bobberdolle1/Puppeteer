@@ -23,7 +23,7 @@ log = "*"
 mime_guess = "*"
 nu-ansi-term = "0.50"
 once_cell = "1"
-rand = "*"
+rand = "0.9"
 reqwest = { version = "*", features = ["json", "multipart"] }
 rust-embed = { version = "*", features = ["axum"] }
 serde = { version = "*", features = ["derive"] }
