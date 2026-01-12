@@ -1,15 +1,13 @@
 use crate::db;
 use crate::logging;
-use crate::state::{AppState, DialogueState, PendingBatch, WizardState};
+use crate::state::{AppState, DialogueState, WizardState};
 use teloxide::prelude::*;
 use teloxide::types::{ParseMode, ReplyParameters};
-use std::time::Instant;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 const MAX_CONTEXT_MESSAGES: usize = 20;
 const MAX_RAG_CHUNKS: u32 = 3;
 const DEFAULT_PERSONA_PROMPT: &str = "You are a helpful AI assistant.";
-const DEBOUNCE_MS: u64 = 1500; // Wait 1.5 seconds for more messages
 
 pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
@@ -326,58 +324,9 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         return Ok(());
     }
 
-    // --- Debounce: collect messages and wait for more ---
-    let thread_id = msg.thread_id;
-    let batch_key = (chat_id, thread_id);
-    let user_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "User".to_string());
-    
-    {
-        let mut pending = state.pending_messages.lock().await;
-        let batch = pending.entry(batch_key).or_insert_with(|| PendingBatch {
-            messages: Vec::new(),
-            last_message_time: Instant::now(),
-            user_id: Some(user_id),
-            user_name: user_name.clone(),
-        });
-        batch.messages.push(effective_text.clone());
-        batch.last_message_time = Instant::now();
-        
-        // If this is not the first message in batch, just add and return
-        // The first message handler will process all
-        if batch.messages.len() > 1 {
-            tracing::debug!(target: "batch", "Added to batch {:?}, total: {}", batch_key, batch.messages.len());
-            return Ok(());
-        }
-    }
-    
-    // Wait for debounce period
-    tokio::time::sleep(std::time::Duration::from_millis(DEBOUNCE_MS)).await;
-    
-    // Check if more messages arrived during debounce
-    let combined_text = {
-        let mut pending = state.pending_messages.lock().await;
-        if let Some(batch) = pending.remove(&batch_key) {
-            // Check if last message was recent (more messages might be coming)
-            if batch.last_message_time.elapsed().as_millis() < (DEBOUNCE_MS / 2) as u128 {
-                // Put it back and wait more
-                pending.insert(batch_key, batch);
-                drop(pending);
-                tokio::time::sleep(std::time::Duration::from_millis(DEBOUNCE_MS)).await;
-                
-                // Try again
-                let mut pending = state.pending_messages.lock().await;
-                pending.remove(&batch_key).map(|b| b.messages.join("\n")).unwrap_or_else(|| effective_text.clone())
-            } else {
-                batch.messages.join("\n")
-            }
-        } else {
-            effective_text.clone()
-        }
-    };
-
     // --- RAG & Context ---
     let long_term_memories = if chat_settings.rag_enabled {
-        retrieve_memories(&state, chat_id, &combined_text).await
+        retrieve_memories(&state, chat_id, &effective_text).await
     } else {
         vec![] // Empty vector if RAG is disabled
     };
@@ -402,7 +351,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
 
     // --- Generate Response ---
     let user_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "User".to_string());
-    let text_preview = combined_text.chars().take(50).collect::<String>();
+    let text_preview = effective_text.chars().take(50).collect::<String>();
     logging::log_message_received(chat_id.0, &user_name, &text_preview, media_description.is_some());
     
     let start_time = std::time::Instant::now();
@@ -450,12 +399,7 @@ pub async fn handle_message(bot: Bot, msg: Message, state: AppState) -> Response
         Err(e) => {
             let response_time = start_time.elapsed().as_millis();
             logging::log_error("LLM generation", &format!("Failed after {}ms: {}", response_time, e));
-            let mut err_req = bot.send_message(chat_id, "Не удалось сгенерировать ответ.")
-                .reply_parameters(ReplyParameters::new(msg.id));
-            if let Some(tid) = thread_id {
-                err_req = err_req.message_thread_id(tid);
-            }
-            err_req.await?;
+            // Don't spam error messages to chat - just log it
         }
     }
 
