@@ -4,28 +4,44 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        Telegram                              │
+│                    Telegram (Bot API)                        │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                      PersonaForge                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │   Handlers  │  │   WebApp    │  │   Security  │          │
-│  │  (teloxide) │  │   (axum)    │  │             │          │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘          │
-│         │                │                │                  │
-│         └────────────────┼────────────────┘                  │
-│                          │                                   │
-│                    ┌─────┴─────┐                             │
-│                    │  AppState │                             │
-│                    └─────┬─────┘                             │
-│         ┌────────────────┼────────────────┐                  │
-│         │                │                │                  │
-│  ┌──────┴──────┐  ┌──────┴──────┐  ┌──────┴──────┐          │
-│  │     DB      │  │     LLM     │  │    Voice    │          │
-│  │   (sqlx)    │  │  (Ollama)   │  │  (Whisper)  │          │
-│  └─────────────┘  └─────────────┘  └─────────────┘          │
+│                     Admin Bot (teloxide)                     │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │  Commands: /add_account, /list_accounts, /status     │   │
+│  │  Dialogues: Phone → Code → 2FA → Prompt              │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        AppState                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────────────┐  │
+│  │  Config  │  │ Database │  │  Userbot Registry        │  │
+│  │          │  │  (SQLx)  │  │  HashMap<id, Handle>     │  │
+│  └──────────┘  └──────────┘  └──────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Userbot Workers (MTProto)                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │  Userbot 1   │  │  Userbot 2   │  │  Userbot N   │      │
+│  │  (rust-tdlib)│  │  (rust-tdlib)│  │  (rust-tdlib)│      │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
+│         │                 │                 │               │
+│         └─────────────────┼─────────────────┘               │
+│                           │                                 │
+│                           ▼                                 │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │              AI Core (Ollama + Whisper)            │    │
+│  │  • Response generation                             │    │
+│  │  • Voice transcription                             │    │
+│  │  • Humanization (delays, typing)                   │    │
+│  └────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -33,42 +49,30 @@
 
 ```
 src/
-├── main.rs              # Entry point, dispatcher setup
+├── main.rs              # Entry point, admin bot dispatcher
 ├── lib.rs               # Module exports
 ├── config.rs            # Environment configuration
-├── state.rs             # Shared state (AppState)
-├── logging.rs           # Colored logging system
+├── state.rs             # AppState, userbot registry
 │
 ├── bot/
-│   └── handlers/
-│       ├── mod.rs
-│       ├── commands.rs  # /menu, /status, etc.
-│       ├── messages.rs  # Message processing, RAG
-│       └── callbacks.rs # Inline keyboard handlers
+│   ├── mod.rs           # Admin bot setup, dialogue routing
+│   ├── handlers.rs      # Admin commands
+│   ├── dialogues.rs     # TDLib authentication flows
+│   └── middleware.rs    # Owner verification
 │
-├── db/
-│   └── mod.rs           # SQLx queries
+├── userbot/
+│   ├── mod.rs           # Userbot module exports
+│   └── worker.rs        # MTProto event loop, humanization
 │
-├── llm/
-│   ├── mod.rs
-│   └── client.rs        # Ollama API client
+├── ai/
+│   ├── mod.rs           # AI module exports
+│   ├── ollama.rs        # Ollama API client
+│   └── whisper.rs       # Whisper API client
 │
-├── security/
-│   └── mod.rs           # Prompt injection, rate limiting
-│
-├── voice/
-│   └── mod.rs           # Whisper client
-│
-├── web/
-│   ├── mod.rs
-│   └── search.rs        # DuckDuckGo client
-│
-└── webapp/
-    ├── mod.rs
-    ├── server.rs        # Axum router
-    ├── api.rs           # REST endpoints
-    ├── auth.rs          # Telegram WebApp auth
-    └── static/          # Embedded frontend
+└── db/
+    ├── mod.rs           # Database operations
+    ├── models.rs        # Data models
+    └── repository.rs    # Repository pattern
 ```
 
 ## Ключевые компоненты

@@ -1,217 +1,165 @@
-# Contributing to PersonaForge
+# Contributing to Puppeteer 🎭
 
-First off, thanks for taking the time to contribute! 🎉
+Thank you for your interest in contributing to Puppeteer! This document provides guidelines and instructions for contributing.
 
-## 📋 Table of Contents
+## Code of Conduct
 
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Setup](#development-setup)
-- [Making Changes](#making-changes)
-- [Pull Request Process](#pull-request-process)
-- [Style Guidelines](#style-guidelines)
-- [Community](#community)
+By participating in this project, you agree to maintain a respectful and inclusive environment for everyone.
 
-## 📜 Code of Conduct
+## How to Contribute
 
-This project adheres to a Code of Conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior to the maintainers.
+### Reporting Bugs
 
-## 🚀 Getting Started
+Before creating bug reports, please check existing issues to avoid duplicates. When creating a bug report, include:
+
+- **Clear title and description**
+- **Steps to reproduce** the behavior
+- **Expected behavior**
+- **Actual behavior**
+- **Environment details** (OS, Rust version, etc.)
+- **Logs or error messages** (if applicable)
+
+### Suggesting Enhancements
+
+Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion, include:
+
+- **Clear title and description**
+- **Use case** explaining why this enhancement would be useful
+- **Possible implementation** (if you have ideas)
+
+### Pull Requests
+
+1. **Fork the repository** and create your branch from `main`
+2. **Make your changes** following the coding standards below
+3. **Add tests** if applicable
+4. **Update documentation** if needed
+5. **Ensure tests pass**: `cargo test`
+6. **Run formatting**: `cargo fmt`
+7. **Run linting**: `cargo clippy`
+8. **Commit your changes** with clear commit messages
+9. **Push to your fork** and submit a pull request
+
+## Development Setup
 
 ### Prerequisites
 
-- Rust 1.70+ ([rustup.rs](https://rustup.rs/))
-- Ollama ([ollama.ai](https://ollama.ai/))
-- SQLite
-- Git
+- Rust 1.70 or higher
+- Docker & Docker Compose (for testing)
+- TDLib dependencies (see README)
 
-### Types of Contributions
-
-- 🐛 **Bug fixes**: Found a bug? Fix it!
-- ✨ **Features**: Have an idea? Implement it!
-- 📚 **Documentation**: Improve docs, add examples
-- 🧪 **Tests**: Add test coverage
-- 🌐 **Translations**: Help translate prompts/messages
-- 🎨 **UI/UX**: Improve Mini App interface
-
-## 💻 Development Setup
+### Building
 
 ```bash
-# Clone the repository
-git clone https://github.com/bobberdolle1/PersonaForge.git
-cd PersonaForge
+# Clone your fork
+git clone https://github.com/yourusername/puppeteer.git
+cd puppeteer
 
-# Copy environment config
-cp .env.example .env
+# Build
+cargo build
 
-# Edit .env with your settings
-# At minimum: TELOXIDE_TOKEN, OWNER_ID
-
-# Install Ollama and pull a model
-ollama pull llama3.2
-ollama pull nomic-embed-text
-
-# Run in development mode
-cargo run
+# Run tests
+cargo test
 
 # Run with logging
 RUST_LOG=debug cargo run
 ```
 
-### Project Structure
-
-```
-src/
-├── main.rs              # Entry point
-├── config.rs            # Configuration
-├── state.rs             # Shared state
-├── bot/handlers/        # Telegram handlers
-├── db/                  # Database queries
-├── llm/                 # Ollama client
-├── security/            # Security features
-├── voice/               # Whisper integration
-├── web/                 # Web search
-└── webapp/              # Mini App
-```
-
-## 🔧 Making Changes
-
-### Branch Naming
-
-- `feature/description` - New features
-- `fix/description` - Bug fixes
-- `docs/description` - Documentation
-- `refactor/description` - Code refactoring
-
-### Commit Messages
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-type(scope): description
-
-[optional body]
-
-[optional footer]
-```
-
-Types:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation
-- `style`: Formatting
-- `refactor`: Code restructuring
-- `test`: Adding tests
-- `chore`: Maintenance
-
-Examples:
-```
-feat(personas): add trigger keywords support
-fix(rag): correct time-decay calculation
-docs(readme): add Mini App setup guide
-```
-
-### Before Submitting
-
-```bash
-# Format code
-cargo fmt
-
-# Run linter
-cargo clippy -- -D warnings
-
-# Run tests
-cargo test
-
-# Check for security issues
-cargo audit
-```
-
-## 📤 Pull Request Process
-
-1. **Fork** the repository
-2. **Create** a feature branch from `main`
-3. **Make** your changes
-4. **Test** thoroughly
-5. **Update** documentation if needed
-6. **Submit** a pull request
-
-### PR Checklist
-
-- [ ] Code follows project style
-- [ ] Self-reviewed the code
-- [ ] Added comments where needed
-- [ ] Updated documentation
-- [ ] No new warnings
-- [ ] Tests pass locally
-- [ ] Commit messages follow convention
-
-### Review Process
-
-1. Maintainers will review your PR
-2. Address any requested changes
-3. Once approved, PR will be merged
-4. Your contribution will be in the next release! 🎉
-
-## 📝 Style Guidelines
+## Coding Standards
 
 ### Rust Style
 
-- Follow [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
-- Use `rustfmt` for formatting
-- Address all `clippy` warnings
-- Document public APIs with `///` comments
+- Follow the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
+- Use `cargo fmt` for formatting
+- Address all `cargo clippy` warnings
+- Write idiomatic Rust code
 
-```rust
-/// Creates a new persona with the given name and prompt.
-///
-/// # Arguments
-/// * `name` - The persona's display name
-/// * `prompt` - The system prompt defining personality
-///
-/// # Returns
-/// The created persona's ID
-pub async fn create_persona(name: &str, prompt: &str) -> Result<i64> {
-    // Implementation
-}
-```
+### Code Organization
+
+- Keep functions focused and small
+- Use meaningful variable and function names
+- Add comments for complex logic
+- Document public APIs with doc comments
 
 ### Error Handling
 
-- Use `anyhow::Result` for application errors
-- Provide context with `.context("description")`
-- Log errors appropriately
+- Use `Result<T, E>` for fallible operations
+- Provide context with `anyhow::Context`
+- Log errors appropriately with `tracing`
 
-```rust
-let result = some_operation()
-    .await
-    .context("Failed to perform operation")?;
+### Testing
+
+- Write unit tests for new functionality
+- Add integration tests for complex features
+- Ensure tests are deterministic and isolated
+
+### Commit Messages
+
+Follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+
+```
+feat: add voice message support
+fix: resolve database connection leak
+docs: update installation instructions
+refactor: simplify authentication flow
+test: add tests for reply probability
 ```
 
-### Logging
+## Project Structure
 
-- Use `tracing` macros
-- Include relevant context
-- Choose appropriate levels:
-  - `error!` - Failures requiring attention
-  - `warn!` - Potential issues
-  - `info!` - Important events
-  - `debug!` - Development details
-  - `trace!` - Verbose debugging
+```
+src/
+├── main.rs              # Application entry point
+├── config.rs            # Configuration management
+├── state.rs             # Shared application state
+├── bot/                 # Admin bot (teloxide)
+│   ├── handlers.rs      # Command handlers
+│   ├── dialogues.rs     # Authentication flows
+│   └── middleware.rs    # Middleware (auth, rate limiting)
+├── userbot/             # MTProto userbots
+│   └── worker.rs        # Event loop and message handling
+├── ai/                  # AI integrations
+│   ├── ollama.rs        # LLM client
+│   └── whisper.rs       # Voice transcription
+└── db/                  # Database layer
+    ├── models.rs        # Data models
+    └── repository.rs    # Database operations
+```
 
-## 🌟 Recognition
+## Areas for Contribution
 
-Contributors are recognized in:
-- GitHub contributors page
-- Release notes
-- Special thanks in README (for significant contributions)
+### High Priority
 
-## 💬 Community
+- [ ] Comprehensive test coverage
+- [ ] Performance optimizations
+- [ ] Documentation improvements
+- [ ] Error handling enhancements
 
-- **Discussions**: Use GitHub Discussions for questions
-- **Issues**: Report bugs and request features
-- **Pull Requests**: Submit your contributions
+### Features
+
+- [ ] Web dashboard for management
+- [ ] Advanced RAG memory system
+- [ ] Multi-language support
+- [ ] Plugin system
+- [ ] Metrics and monitoring
+
+### Infrastructure
+
+- [ ] CI/CD improvements
+- [ ] Docker optimization
+- [ ] Deployment guides
+- [ ] Benchmarking suite
+
+## Questions?
+
+Feel free to:
+- Open an issue for discussion
+- Join our community discussions
+- Reach out to maintainers
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the MIT License.
 
 ---
 
-Thank you for contributing to PersonaForge! 🤖❤️
+Thank you for contributing to Puppeteer! 🎭

@@ -1,541 +1,253 @@
-<div align="center">
+# Puppeteer 🎭
 
-<!-- ANIMATED HEADER -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=PersonaForge&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=🤖%20AI%20Personas%20•%20🧠%20RAG%20Memory%20•%20🎤%20Voice%20•%20👁️%20Vision&descAlignY=52&descSize=18"/>
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Build Status](https://github.com/yourusername/puppeteer/workflows/Rust/badge.svg)](https://github.com/yourusername/puppeteer/actions)
+[![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](docker-compose.yml)
 
-<!-- TYPING ANIMATION -->
-<a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=6C63FF&center=true&vCenter=true&multiline=true&repeat=false&width=600&height=80&lines=Telegram+Bot+with+Customizable+AI+Personas;Long-term+Memory+%26+Multimodal+Capabilities" alt="Typing SVG" /></a>
+**Multi-account Telegram userbot orchestration system powered by AI for human-like interactions.**
 
-<!-- BADGES ROW 1 -->
-<p>
-<a href="https://github.com/bobberdolle1/PersonaForge/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/bobberdolle1/PersonaForge/ci.yml?style=for-the-badge&logo=github-actions&logoColor=white&label=CI&color=2ea44f" alt="CI"></a>
-<a href="https://github.com/bobberdolle1/PersonaForge/releases"><img src="https://img.shields.io/github/v/release/bobberdolle1/PersonaForge?style=for-the-badge&logo=semantic-release&logoColor=white&color=6C63FF" alt="Release"></a>
-<a href="https://github.com/bobberdolle1/PersonaForge/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bobberdolle1/PersonaForge?style=for-the-badge&logo=opensourceinitiative&logoColor=white&color=green" alt="License"></a>
-</p>
+Puppeteer is a sophisticated Telegram automation framework that manages multiple MTProto userbot accounts, each driven by customizable AI personalities. Built with Rust for performance and reliability, it simulates natural human behavior patterns while providing advanced features like RAG memory, voice transcription, and intelligent response generation.
 
-<!-- BADGES ROW 2 -->
-<p>
-<img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust">
-<img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram">
-<img src="https://img.shields.io/badge/Ollama-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Ollama">
-<img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
-<img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
-</p>
+## 🏗️ Architecture
 
-<!-- STATS -->
-<p>
-<img src="https://img.shields.io/github/stars/bobberdolle1/PersonaForge?style=for-the-badge&logo=github&color=yellow" alt="Stars">
-<img src="https://img.shields.io/github/forks/bobberdolle1/PersonaForge?style=for-the-badge&logo=github&color=blue" alt="Forks">
-<img src="https://img.shields.io/github/issues/bobberdolle1/PersonaForge?style=for-the-badge&logo=github&color=red" alt="Issues">
-<img src="https://img.shields.io/github/last-commit/bobberdolle1/PersonaForge?style=for-the-badge&logo=github&color=purple" alt="Last Commit">
-</p>
-
-<!-- QUICK LINKS -->
-<p>
-<a href="https://github.com/bobberdolle1/PersonaForge/wiki"><img src="https://img.shields.io/badge/📖_Documentation-Wiki-blue?style=for-the-badge" alt="Wiki"></a>
-<a href="https://github.com/bobberdolle1/PersonaForge/issues/new?template=bug_report.md"><img src="https://img.shields.io/badge/🐛_Report-Bug-red?style=for-the-badge" alt="Bug"></a>
-<a href="https://github.com/bobberdolle1/PersonaForge/issues/new?template=feature_request.md"><img src="https://img.shields.io/badge/✨_Request-Feature-green?style=for-the-badge" alt="Feature"></a>
-<a href="https://github.com/bobberdolle1/PersonaForge/discussions"><img src="https://img.shields.io/badge/💬_Join-Discussions-purple?style=for-the-badge" alt="Discussions"></a>
-</p>
-
-</div>
-
-<!-- DEMO GIF -->
-<div align="center">
-<br>
-<img src="https://raw.githubusercontent.com/bobberdolle1/PersonaForge/main/.github/assets/demo.gif" width="700" alt="PersonaForge Demo">
-<br><br>
-</div>
-
----
-
-
-<!-- FEATURES SECTION -->
-## <img src="https://media.giphy.com/media/iY8CRBdQXODJSCERIr/giphy.gif" width="30"> Features
-
-<table>
-<tr>
-<td width="50%">
-
-### 🎭 AI Personas
-Create unique AI personalities with custom prompts, display names, and trigger keywords. Switch between personas on the fly.
-
-```json
-{
-  "name": "Philosopher",
-  "display_name": "Сократ",
-  "triggers": "философия,смысл,почему",
-  "prompt": "Ты — Сократ..."
-}
+```mermaid
+graph TB
+    A[Admin Bot<br/>teloxide/Bot API] -->|Manages| B[Userbot Pool]
+    B --> C[Userbot 1<br/>rust-tdlib/MTProto]
+    B --> D[Userbot 2<br/>rust-tdlib/MTProto]
+    B --> E[Userbot N<br/>rust-tdlib/MTProto]
+    
+    C --> F[AI Core]
+    D --> F
+    E --> F
+    
+    F --> G[Ollama LLM<br/>Response Generation]
+    F --> H[Whisper API<br/>Voice Transcription]
+    F --> I[RAG Memory<br/>Context Retrieval]
+    
+    J[SQLite Database] -.->|Stores| B
+    J -.->|Stores| F
+    
+    style A fill:#4CAF50
+    style F fill:#2196F3
+    style J fill:#FF9800
 ```
 
-</td>
-<td width="50%">
+## ✨ Features
 
-### 🧠 RAG Memory
-Vector-based conversation memory with time-decay weighting. The bot remembers context and uses relevant information.
+- **🤖 Multi-Account Management**: Orchestrate unlimited Telegram userbot accounts from a single admin interface
+- **🧠 AI-Driven Responses**: Powered by Ollama with customizable system prompts per account
+- **👤 Humanization Engine**: 
+  - Configurable reply probability (0-100%)
+  - Read delays based on message length
+  - Typing indicators with realistic timing
+  - Natural conversation flow
+- **💾 RAG Memory System**: Long-term conversation memory with vector embeddings
+- **🎤 Voice Transcription**: Automatic voice message transcription via Whisper API
+- **🖼️ Vision Support**: Image analysis through multimodal LLM models
+- **🔒 Security Features**:
+  - Prompt injection detection
+  - Strike system for abuse prevention
+  - Rate limiting
+  - Owner-only admin commands
+- **📊 Database**: SQLite with WAL mode for high concurrency
+- **🐳 Docker Ready**: Complete containerization with docker-compose
 
-```
-score = similarity × e^(-decay × hours/24)
-```
+## 🛠️ Tech Stack
 
-</td>
-</tr>
-<tr>
-<td width="50%">
+- **Language**: Rust (Edition 2021)
+- **Async Runtime**: Tokio
+- **Admin Bot**: teloxide (Telegram Bot API)
+- **Userbots**: rust-tdlib (Telegram MTProto)
+- **Database**: SQLx + SQLite
+- **AI/ML**: Ollama (LLM), Whisper (Speech-to-Text)
+- **HTTP Client**: reqwest
+- **Serialization**: serde + serde_json
 
-### 🎤 Voice Messages
-Whisper-powered voice transcription. Send voice messages and get intelligent responses through your active persona.
+## 🚀 Quick Start
 
-</td>
-<td width="50%">
+### Prerequisites
 
-### 👁️ Vision & Media
-Analyze images, GIFs (3-frame extraction), and video messages. Multimodal understanding through LLaVA/BakLLaVA.
+- Docker & Docker Compose
+- Telegram API credentials ([obtain here](https://my.telegram.org/apps))
+- Telegram Bot Token ([create via @BotFather](https://t.me/botfather))
+- Ollama instance (for AI responses)
 
-</td>
-</tr>
-<tr>
-<td width="50%">
+### Setup
 
-### 🌐 Web Search
-DuckDuckGo integration for real-time information. No API keys required — privacy-focused search.
-
-</td>
-<td width="50%">
-
-### 🛡️ Security
-40+ prompt injection patterns detection, strike system, adaptive rate limiting, and automatic blocking.
-
-</td>
-</tr>
-</table>
-
----
-
-
-<!-- QUICK START -->
-## <img src="https://media.giphy.com/media/WUlplcMpOCEmTGBtBW/giphy.gif" width="30"> Quick Start
-
-<details>
-<summary><b>📋 Prerequisites</b></summary>
-<br>
-
-- [Rust](https://rustup.rs/) 1.70+
-- [Ollama](https://ollama.ai/) with models
-- Telegram Bot Token from [@BotFather](https://t.me/BotFather)
-
-</details>
-
-### ⚡ One-liner Install
-
+1. **Clone the repository**:
 ```bash
-git clone https://github.com/bobberdolle1/PersonaForge.git && cd PersonaForge && cp .env.example .env
+git clone https://github.com/yourusername/puppeteer.git
+cd puppeteer
 ```
 
-### 🔧 Configure
+2. **Configure environment**:
+```bash
+cp .env.example .env
+# Edit .env with your credentials
+```
 
+Required environment variables:
 ```env
-TELOXIDE_TOKEN=your_bot_token_here
-OWNER_ID=your_telegram_id
-DATABASE_URL=sqlite:persona_forge.db
-OLLAMA_CHAT_MODEL=llama3.2
+# Telegram Bot API
+BOT_TOKEN=your_bot_token_here
+OWNER_IDS=123456789,987654321  # Comma-separated admin user IDs
+
+# Telegram MTProto API
+TELEGRAM_API_ID=your_api_id
+TELEGRAM_API_HASH=your_api_hash
+
+# Database
+DATABASE_URL=sqlite:data/puppeteer.db
+
+# AI Services
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama2
+WHISPER_URL=http://localhost:9000  # Optional
 ```
 
-### 🚀 Run
-
-<table>
-<tr>
-<td>
-
-**Cargo**
-```bash
-cargo run --release
-```
-
-</td>
-<td>
-
-**Docker**
+3. **Start with Docker Compose**:
 ```bash
 docker-compose up --build
 ```
 
-</td>
-</tr>
-</table>
+4. **Add your first userbot**:
+- Send `/add_account` to your admin bot
+- Follow the authentication flow (phone → code → 2FA if enabled)
+- The userbot will start automatically
 
----
+### Manual Build (without Docker)
 
-
-<!-- ARCHITECTURE -->
-## <img src="https://media.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif" width="25"> Architecture
-
-```mermaid
-graph TB
-    subgraph Telegram
-        TG[Telegram API]
-    end
-    
-    subgraph PersonaForge
-        BOT[🤖 Bot Handlers]
-        WEB[🌐 Mini App]
-        SEC[🛡️ Security]
-        RAG[🧠 RAG Engine]
-        DB[(💾 SQLite)]
-    end
-    
-    subgraph External
-        OLL[🦙 Ollama]
-        WHI[🎤 Whisper]
-        DDG[🔍 DuckDuckGo]
-    end
-    
-    TG <--> BOT
-    TG <--> WEB
-    BOT --> SEC
-    BOT --> RAG
-    BOT <--> DB
-    RAG <--> DB
-    BOT <--> OLL
-    BOT <--> WHI
-    BOT <--> DDG
-    WEB <--> DB
-    
-    style BOT fill:#6C63FF,color:#fff
-    style RAG fill:#00D9FF,color:#000
-    style SEC fill:#FF6B6B,color:#fff
-    style DB fill:#4CAF50,color:#fff
-```
-
-<details>
-<summary><b>📁 Project Structure</b></summary>
-
-```
-src/
-├── main.rs              # Entry point, dispatcher setup
-├── config.rs            # Environment configuration
-├── state.rs             # Shared state (AppState)
-├── logging.rs           # Colored logging system
-│
-├── bot/handlers/
-│   ├── commands.rs      # /menu, /status, /create_persona...
-│   ├── messages.rs      # Message processing, RAG retrieval
-│   └── callbacks.rs     # Inline keyboard handlers
-│
-├── db/                  # SQLx queries
-├── llm/                 # Ollama client
-├── security/            # Prompt injection protection
-├── voice/               # Whisper integration
-├── web/                 # DuckDuckGo search
-└── webapp/              # Mini App (Axum + embedded frontend)
-```
-
-</details>
-
----
-
-
-<!-- COMMANDS -->
-## <img src="https://media.giphy.com/media/jSKBmKkvo2dPQQtsR1/giphy.gif" width="25"> Commands
-
-<div align="center">
-
-| Command | Description |
-|:--------|:------------|
-| `/menu` | 🎛️ Interactive main menu |
-| `/status` | 📊 System status (Ollama, DB, queue) |
-| `/create_persona name\|prompt` | 🎭 Create new persona |
-| `/list_personas` | 📋 List all personas |
-| `/activate_persona ID` | ✅ Activate persona |
-| `/set_model name` | 🧠 Change LLM model |
-| `/set_temperature 0.7` | 🌡️ Set temperature |
-| `/triggers word1, word2` | 🎯 Set trigger keywords |
-| `/enable_rag` / `/disable_rag` | 🧠 Toggle RAG memory |
-| `/block user_id [min]` | 🚫 Block user |
-| `/whoami` | 👤 What bot knows about you |
-
-</div>
-
----
-
-
-<!-- MINI APP -->
-## <img src="https://media.giphy.com/media/ln7z2eWriiQAllfVcn/giphy.gif" width="25"> Mini App
-
-<div align="center">
-<table>
-<tr>
-<td align="center"><b>📊 Status</b><br><sub>Real-time monitoring</sub></td>
-<td align="center"><b>🎭 Personas</b><br><sub>Create & manage</sub></td>
-<td align="center"><b>💬 Chats</b><br><sub>Settings per chat</sub></td>
-<td align="center"><b>🛡️ Security</b><br><sub>Block & monitor</sub></td>
-<td align="center"><b>⚙️ Config</b><br><sub>Runtime settings</sub></td>
-</tr>
-</table>
-</div>
-
-<details>
-<summary><b>🔧 Setup Mini App</b></summary>
-
-1. **Start HTTPS tunnel:**
 ```bash
-ssh -R 80:localhost:8080 serveo.net
-# or: ngrok http 8080
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install TDLib dependencies (Ubuntu/Debian)
+sudo apt-get install -y build-essential cmake gperf libssl-dev zlib1g-dev
+
+# Build
+cargo build --release
+
+# Run
+./target/release/puppeteer
 ```
 
-2. **Create in @BotFather:**
+## 📖 Usage
+
+### Admin Commands
+
+- `/add_account` - Add a new userbot account
+- `/list_accounts` - List all registered accounts
+- `/start_account <id>` - Start a specific userbot
+- `/stop_account <id>` - Stop a specific userbot
+- `/set_prompt <id>` - Update system prompt for an account
+- `/set_probability <id> <0-100>` - Set reply probability
+- `/whitelist_chat <id> <chat_id>` - Allow userbot to respond in a chat
+- `/status` - Show system status
+- `/help` - Display all commands
+
+### System Prompt Customization
+
+Each userbot can have a unique AI personality defined by its system prompt. The default prompt uses a Russian casual conversation style with positive framing and roleplay techniques.
+
+Example custom prompt:
 ```
-/newapp → Select bot → Name: PersonaForge Panel → URL: https://your-url.com
-```
-
-3. **Add menu button:**
-```
-/setmenubutton → Select bot → web_app → 🎛️ Panel → URL
-```
-
-</details>
-
----
-
-
-<!-- CONFIGURATION -->
-## <img src="https://media.giphy.com/media/VgCDAzcKvsR6OM0uWg/giphy.gif" width="25"> Configuration
-
-<details>
-<summary><b>📝 Full .env Example</b></summary>
-
-```env
-# ═══════════════════════════════════════════════════════════════
-# 🤖 TELEGRAM
-# ═══════════════════════════════════════════════════════════════
-TELOXIDE_TOKEN=your_bot_token
-OWNER_ID=123456789
-
-# ═══════════════════════════════════════════════════════════════
-# 💾 DATABASE
-# ═══════════════════════════════════════════════════════════════
-DATABASE_URL=sqlite:persona_forge.db
-
-# ═══════════════════════════════════════════════════════════════
-# 🦙 OLLAMA
-# ═══════════════════════════════════════════════════════════════
-OLLAMA_URL=http://localhost:11434
-OLLAMA_CHAT_MODEL=llama3.2
-OLLAMA_EMBEDDING_MODEL=nomic-embed-text
-OLLAMA_VISION_MODEL=llava
-
-# ═══════════════════════════════════════════════════════════════
-# ⚡ GENERATION
-# ═══════════════════════════════════════════════════════════════
-TEMPERATURE=0.7
-MAX_TOKENS=2048
-LLM_TIMEOUT_SECONDS=120
-
-# ═══════════════════════════════════════════════════════════════
-# 🎛️ FEATURES
-# ═══════════════════════════════════════════════════════════════
-VISION_ENABLED=true
-VOICE_ENABLED=true
-WEB_SEARCH_ENABLED=true
-
-# ═══════════════════════════════════════════════════════════════
-# 🎤 WHISPER
-# ═══════════════════════════════════════════════════════════════
-WHISPER_URL=http://localhost:8080/inference
-
-# ═══════════════════════════════════════════════════════════════
-# 🧠 RAG
-# ═══════════════════════════════════════════════════════════════
-RAG_DECAY_RATE=0.1
-SUMMARY_THRESHOLD=50
-
-# ═══════════════════════════════════════════════════════════════
-# 📊 QUEUE
-# ═══════════════════════════════════════════════════════════════
-MAX_CONCURRENT_LLM_REQUESTS=3
-QUEUE_TIMEOUT_SECONDS=30
-
-# ═══════════════════════════════════════════════════════════════
-# 🌐 WEBAPP
-# ═══════════════════════════════════════════════════════════════
-WEBAPP_PORT=8080
+You are a tech enthusiast who loves discussing programming and AI.
+Keep responses concise and use technical terminology when appropriate.
+Show genuine curiosity about new technologies.
 ```
 
-</details>
-
----
-
-
-<!-- PERSONAS EXAMPLES -->
-## <img src="https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" width="25"> Persona Examples
-
-<table>
-<tr>
-<td>
-
-**🧙 Philosopher**
-```json
-{
-  "name": "Сократ",
-  "triggers": "философия,смысл",
-  "prompt": "Ты — Сократ. Отвечаешь вопросами, подводя к истине."
-}
-```
-
-</td>
-<td>
-
-**🤖 Tech Expert**
-```json
-{
-  "name": "Техник",
-  "triggers": "код,баг,ошибка",
-  "prompt": "Ты — senior разработчик. Даёшь чёткие ответы с примерами кода."
-}
-```
-
-</td>
-</tr>
-<tr>
-<td>
-
-**🎬 Character**
-```json
-{
-  "name": "Чувак",
-  "triggers": "dude,боулинг",
-  "prompt": "Ты — The Dude из 'Большой Лебовски'. Расслабленный философ."
-}
-```
-
-</td>
-<td>
-
-**👋 Friend**
-```json
-{
-  "name": "Бро",
-  "triggers": "бро,друг",
-  "prompt": "Ты — лучший друг. Поддерживаешь, шутишь, общаешься неформально."
-}
-```
-
-</td>
-</tr>
-</table>
-
----
-
-
-<!-- TECH STACK -->
-## <img src="https://media.giphy.com/media/uhQuegHFqkVYuFMXMQ/giphy.gif" width="25"> Tech Stack
-
-<div align="center">
-
-| Category | Technologies |
-|:--------:|:-------------|
-| **Language** | ![Rust](https://img.shields.io/badge/Rust-000000?style=flat-square&logo=rust&logoColor=white) ![Tokio](https://img.shields.io/badge/Tokio-async-blue?style=flat-square) |
-| **Bot** | ![Teloxide](https://img.shields.io/badge/Teloxide-Telegram_Bot-2CA5E0?style=flat-square&logo=telegram) |
-| **Web** | ![Axum](https://img.shields.io/badge/Axum-Web_Framework-orange?style=flat-square) |
-| **Database** | ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white) ![SQLx](https://img.shields.io/badge/SQLx-async-green?style=flat-square) |
-| **AI** | ![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-black?style=flat-square) ![Whisper](https://img.shields.io/badge/Whisper-Voice-yellow?style=flat-square) |
-| **Search** | ![DuckDuckGo](https://img.shields.io/badge/DuckDuckGo-Privacy-DE5833?style=flat-square&logo=duckduckgo&logoColor=white) |
-| **Deploy** | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white) ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=github-actions&logoColor=white) |
-
-</div>
-
----
-
-
-<!-- LOGGING -->
-## <img src="https://media.giphy.com/media/KzJkzjggfGN5Py6nkT/giphy.gif" width="25"> Beautiful Logging
+## 🗂️ Project Structure
 
 ```
-╔══════════════════════════════════════════════════════════════╗
-║   ██████╗ ███████╗██████╗ ███████╗ ██████╗ ███╗   ██╗ █████╗ ║
-║   ██╔══██╗██╔════╝██╔══██╗██╔════╝██╔═══██╗████╗  ██║██╔══██╗║
-║   ██████╔╝█████╗  ██████╔╝███████╗██║   ██║██╔██╗ ██║███████║║
-║   ██╔═══╝ ██╔══╝  ██╔══██╗╚════██║██║   ██║██║╚██╗██║██╔══██║║
-║   ██║     ███████╗██║  ██║███████║╚██████╔╝██║ ╚████║██║  ██║║
-║   ╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝║
-║              🤖 F O R G E   v1.0.0                           ║
-╚══════════════════════════════════════════════════════════════╝
-
-┌─ Configuration ─────────────────────────────────────────────┐
-│  🤖  Bot Name    │ PersonaForge                             │
-│  🧠  LLM Model   │ llama3.2                                 │
-│  ✓   Vision      │ Enabled                                  │
-└──────────────────────────────────────────────────────────────┘
-
-✓  Database connected: sqlite:persona_forge.db
-✓  Bot identity: MyBot (@my_bot)
-✓  WebApp listening on port 8080
-
-🚀  PersonaForge is ready and listening!
-
-12:34:56 INF [messages] 💬 User in -123456: "Привет!"
-12:34:57 INF [llm] 🧠 Response in 1234ms (156 chars)
+puppeteer/
+├── src/
+│   ├── main.rs              # Entry point
+│   ├── config.rs            # Configuration management
+│   ├── state.rs             # Application state
+│   ├── bot/                 # Admin bot (teloxide)
+│   │   ├── mod.rs
+│   │   ├── handlers.rs      # Command handlers
+│   │   ├── dialogues.rs     # Authentication flows
+│   │   └── middleware.rs    # Owner verification
+│   ├── userbot/             # MTProto userbots
+│   │   ├── mod.rs
+│   │   └── worker.rs        # Event loop & message handling
+│   ├── ai/                  # AI integrations
+│   │   ├── mod.rs
+│   │   ├── ollama.rs        # LLM client
+│   │   └── whisper.rs       # Voice transcription
+│   └── db/                  # Database layer
+│       ├── mod.rs
+│       ├── models.rs        # Data models
+│       └── repository.rs    # Database operations
+├── migrations/              # SQLx migrations
+├── data/                    # SQLite database & TDLib sessions
+├── Dockerfile
+├── docker-compose.yml
+└── Cargo.toml
 ```
 
----
+## 🔧 Configuration
 
+### Reply Probability
 
-<!-- CONTRIBUTING -->
-## <img src="https://media.giphy.com/media/du3J3cXyzhj75IOgvA/giphy.gif" width="25"> Contributing
+Control how often a userbot responds to messages (0-100%):
+```bash
+/set_probability 1 75  # 75% chance to reply
+```
 
-<div align="center">
+### Chat Whitelisting
 
-Contributions are welcome! 🎉
+Restrict userbots to specific chats:
+```sql
+INSERT INTO chat_whitelist (account_id, chat_id) VALUES (1, -1001234567890);
+```
 
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](https://github.com/bobberdolle1/PersonaForge/pulls)
+### Humanization Tuning
 
-</div>
+Adjust timing in `src/userbot/worker.rs`:
+- `calculate_read_delay()`: Simulates reading time
+- `calculate_typing_delay()`: Simulates typing speed
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
-2. Create your branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'feat: add amazing feature'`
-4. Push: `git push origin feature/amazing-feature`
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-<details>
-<summary><b>📋 Before submitting</b></summary>
+## 📝 License
 
-```bash
-cargo fmt          # Format code
-cargo clippy       # Lint
-cargo test         # Run tests
-cargo audit        # Security check
-```
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-</details>
+## ⚠️ Disclaimer
 
----
+This software is provided for educational and research purposes only. Users are responsible for complying with Telegram's Terms of Service and applicable laws. The authors are not responsible for any misuse of this software.
 
+**Important Notes**:
+- Using userbots may violate Telegram's ToS
+- Automated messaging can result in account restrictions
+- Always respect rate limits and user privacy
+- Use responsibly and ethically
 
-<!-- FOOTER -->
-## <img src="https://media.giphy.com/media/LnQjpWaON8nhr21vNW/giphy.gif" width="25"> Support
+## 🙏 Acknowledgments
 
-<div align="center">
+- [teloxide](https://github.com/teloxide/teloxide) - Telegram Bot framework
+- [rust-tdlib](https://github.com/antonio-antuan/rust-tdlib) - TDLib Rust wrapper
+- [Ollama](https://ollama.ai/) - Local LLM inference
+- [Whisper](https://github.com/openai/whisper) - Speech recognition
 
-If you like this project, please give it a ⭐!
+## 📧 Support
 
-[![Star History Chart](https://api.star-history.com/svg?repos=bobberdolle1/PersonaForge&type=Date)](https://star-history.com/#bobberdolle1/PersonaForge&Date)
-
-</div>
-
----
-
-<div align="center">
-
-### 📜 License
-
-This project is licensed under the [MIT License](LICENSE)
+For questions and support:
+- Open an [issue](https://github.com/yourusername/puppeteer/issues)
+- Check existing [discussions](https://github.com/yourusername/puppeteer/discussions)
 
 ---
 
-<sub>Made with 🦀 Rust and ❤️</sub>
-
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=100&section=footer"/>
-
-</div>
+**Made with ❤️ and Rust 🦀**

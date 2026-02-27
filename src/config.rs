@@ -1,133 +1,88 @@
-use serde::Deserialize;
+use anyhow::{Context, Result};
+use std::env;
 
-#[derive(Clone, Deserialize)]
+/// Application configuration loaded from environment variables
+#[derive(Debug, Clone)]
 pub struct Config {
-    #[serde(default = "default_ollama_url")]
-    pub ollama_url: String,
-    pub teloxide_token: String,
+    /// Telegram Bot API token for the admin bot
+    pub bot_token: String,
+    
+    /// List of Telegram user IDs allowed to control the admin bot
+    pub owner_ids: Vec<i64>,
+    
+    /// SQLite database URL
     pub database_url: String,
-    pub owner_id: u64,
-    #[serde(default = "default_ollama_chat_model")]
-    pub ollama_chat_model: String,
-    #[serde(default = "default_ollama_embedding_model")]
-    pub ollama_embedding_model: String,
-    #[serde(default = "default_ollama_vision_model")]
-    pub ollama_vision_model: String,
-    #[serde(default = "default_temperature")]
-    pub temperature: f64,
-    #[serde(default = "default_max_tokens")]
-    pub max_tokens: u32,
-    #[serde(default = "default_bot_name")]
-    pub bot_name: String,
-    /// Maximum concurrent LLM requests (queue limit)
-    #[serde(default = "default_max_concurrent_llm")]
-    pub max_concurrent_llm_requests: Option<usize>,
-    /// Timeout for LLM requests in seconds
-    #[serde(default = "default_llm_timeout")]
-    pub llm_timeout_seconds: u64,
-    /// Queue wait timeout in seconds
-    #[serde(default = "default_queue_timeout")]
-    pub queue_timeout_seconds: u64,
-    /// Enable vision (image analysis) support
-    #[serde(default = "default_vision_enabled")]
-    pub vision_enabled: bool,
-    /// Random reply probability (0.0-1.0) for group chats
-    #[serde(default = "default_random_reply_probability")]
-    pub random_reply_probability: f64,
-    /// Enable web search for current information
-    #[serde(default = "default_web_search_enabled")]
-    pub web_search_enabled: bool,
-    /// Enable voice message transcription
-    #[serde(default = "default_voice_enabled")]
-    pub voice_enabled: bool,
-    /// Whisper API URL for voice transcription
-    #[serde(default = "default_whisper_url")]
-    pub whisper_url: String,
-    /// Time decay rate for RAG (0.0 = no decay, 1.0 = fast decay)
-    #[serde(default = "default_rag_decay_rate")]
-    pub rag_decay_rate: f64,
-    /// Number of messages before auto-summarization
-    #[serde(default = "default_summary_threshold")]
-    pub summary_threshold: u32,
-    /// WebApp server port
-    #[serde(default = "default_webapp_port")]
-    pub webapp_port: u16,
-}
-
-fn default_ollama_url() -> String {
-    "http://host.docker.internal:11434".to_string()
-}
-
-fn default_ollama_chat_model() -> String {
-    "gemini-3-flash-preview:cloud".to_string()
-}
-
-fn default_ollama_embedding_model() -> String {
-    "nomic-embed-text".to_string()
-}
-
-fn default_ollama_vision_model() -> String {
-    "llava:latest".to_string()
-}
-
-fn default_temperature() -> f64 {
-    0.7
-}
-
-fn default_max_tokens() -> u32 {
-    2048
-}
-
-fn default_bot_name() -> String {
-    "PersonaForge".to_string()
-}
-
-fn default_max_concurrent_llm() -> Option<usize> {
-    Some(3)
-}
-
-fn default_llm_timeout() -> u64 {
-    120
-}
-
-fn default_queue_timeout() -> u64 {
-    30
-}
-
-fn default_vision_enabled() -> bool {
-    false
-}
-
-fn default_random_reply_probability() -> f64 {
-    0.0
-}
-
-fn default_web_search_enabled() -> bool {
-    true
-}
-
-fn default_voice_enabled() -> bool {
-    false
-}
-
-fn default_whisper_url() -> String {
-    "http://localhost:8080".to_string()
-}
-
-fn default_rag_decay_rate() -> f64 {
-    0.1 // Slow decay by default
-}
-
-fn default_summary_threshold() -> u32 {
-    50 // Summarize every 50 messages
-}
-
-fn default_webapp_port() -> u16 {
-    8080
+    
+    /// Ollama API endpoint
+    pub ollama_url: String,
+    
+    /// Telegram API ID (for MTProto)
+    pub telegram_api_id: i32,
+    
+    /// Telegram API Hash (for MTProto)
+    pub telegram_api_hash: String,
+    
+    /// Default Ollama model to use
+    pub ollama_model: String,
+    
+    /// Whisper API endpoint (optional, for voice transcription)
+    pub whisper_url: Option<String>,
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self, envy::Error> {
-        envy::from_env::<Config>()
+    /// Load configuration from environment variables
+    pub fn from_env() -> Result<Self> {
+        dotenvy::dotenv().ok();
+
+        let bot_token = env::var("TELOXIDE_TOKEN")
+            .context("TELOXIDE_TOKEN must be set")?;
+
+        let owner_ids_str = env::var("OWNER_IDS")
+            .context("OWNER_IDS must be set (comma-separated list of user IDs)")?;
+        
+        let owner_ids: Vec<i64> = owner_ids_str
+            .split(',')
+            .map(|s| s.trim().parse::<i64>())
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to parse OWNER_IDS")?;
+
+        if owner_ids.is_empty() {
+            anyhow::bail!("OWNER_IDS must contain at least one user ID");
+        }
+
+        let database_url = env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "sqlite:data/puppeteer.db".to_string());
+
+        let ollama_url = env::var("OLLAMA_URL")
+            .unwrap_or_else(|_| "http://localhost:11434".to_string());
+
+        let telegram_api_id = env::var("TELEGRAM_API_ID")
+            .context("TELEGRAM_API_ID must be set")?
+            .parse::<i32>()
+            .context("TELEGRAM_API_ID must be a valid integer")?;
+
+        let telegram_api_hash = env::var("TELEGRAM_API_HASH")
+            .context("TELEGRAM_API_HASH must be set")?;
+
+        let ollama_model = env::var("OLLAMA_MODEL")
+            .unwrap_or_else(|_| "llama3.2".to_string());
+
+        let whisper_url = env::var("WHISPER_URL").ok();
+
+        Ok(Config {
+            bot_token,
+            owner_ids,
+            database_url,
+            ollama_url,
+            telegram_api_id,
+            telegram_api_hash,
+            ollama_model,
+            whisper_url,
+        })
+    }
+
+    /// Check if a user ID is an owner
+    pub fn is_owner(&self, user_id: i64) -> bool {
+        self.owner_ids.contains(&user_id)
     }
 }

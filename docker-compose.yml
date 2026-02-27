@@ -1,40 +1,55 @@
+version: '3.8'
+
 services:
-  bot:
+  puppeteer:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: persona_forge_bot
+    container_name: puppeteer_bot
     env_file:
       - .env
     environment:
-      # Override database path for container (mode=rwc creates file if not exists)
-      - DATABASE_URL=sqlite:/app/data/persona_forge.db?mode=rwc
-      # Webapp binds to all interfaces in container
-      - WEBAPP_HOST=0.0.0.0
+      # Override database path for container
+      - DATABASE_URL=sqlite:/app/data/puppeteer.db
       # Enable logging
       - RUST_LOG=info
       # Override Ollama URL to use host.docker.internal (macOS/Windows)
+      # For Linux, use: http://172.17.0.1:11434
       - OLLAMA_URL=http://host.docker.internal:11434
-    ports:
-      - "${WEBAPP_PORT:-8080}:8080"
+      # Override Whisper URL if using external service
+      - WHISPER_URL=http://host.docker.internal:9000
     volumes:
+      # Persist database and TDLib sessions
       - ./data:/app/data
+      # Persist migrations
+      - ./migrations:/app/migrations:ro
     extra_hosts:
+      # Allow container to access host services (Ollama, Whisper)
       - "host.docker.internal:host-gateway"
     dns:
+      # Use Google DNS for reliability
       - 8.8.8.8
       - 8.8.4.4
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+    networks:
+      - puppeteer_network
+
+  # Optional: Run Ollama in Docker (uncomment if not running on host)
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: puppeteer_ollama
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   ports:
+  #     - "11434:11434"
+  #   restart: unless-stopped
+  #   networks:
+  #     - puppeteer_network
 
 volumes:
-  ollama_data:
+  # Uncomment if using Ollama container
+  # ollama_data:
 
 networks:
-  default:
-    name: persona_forge_network
+  puppeteer_network:
+    driver: bridge

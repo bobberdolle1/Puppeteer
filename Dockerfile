@@ -8,6 +8,15 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
+
+# Install C++ build dependencies for tdlib-sys
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    gperf \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching layer
 RUN cargo chef cook --release --recipe-path recipe.json

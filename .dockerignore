@@ -1,8 +1,71 @@
-target/
+# Git
 .git/
+.github/
+.gitignore
+
+# Rust build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# Environment and secrets
 .env
+.env.*
+!.env.example
+
+# Database files
 *.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 data/
-.kiro/
+
+# TDLib sessions
+*.session
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+*.md
+!README.md
+docs/
+wiki/
+PersonaForge.wiki/
+
+# Logs
+*.log
+logs/
+
+# Test files
+tests/
+benches/
+
+# CI/CD
+.github/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
 *.backup
+
+# OS specific
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Cargo lock (will be regenerated)
+Cargo.lock

@@ -1,100 +1,156 @@
 # 🚀 Быстрый старт
 
-Запусти PersonaForge за 5 минут!
+Запусти Puppeteer за 5 минут!
 
-## 1. Установи зависимости
+## Вариант 1: Docker (Рекомендуется)
 
-```bash
-# Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Модели
-ollama pull llama3.2
-ollama pull nomic-embed-text
-```
-
-## 2. Клонируй и настрой
+### 1. Клонируй и настрой
 
 ```bash
-git clone https://github.com/bobberdolle1/PersonaForge.git
-cd PersonaForge
+git clone https://github.com/bobberdolle1/Puppeteer.git
+cd Puppeteer
 cp .env.example .env
 ```
 
-## 3. Получи токен бота
+### 2. Получи учетные данные
 
+**Telegram Bot Token** (для admin-бота):
 1. Открой [@BotFather](https://t.me/BotFather)
 2. `/newbot` → введи имя → введи username
 3. Скопируй токен
 
-## 4. Получи свой ID
-
+**Твой User ID**:
 1. Открой [@userinfobot](https://t.me/userinfobot)
 2. Скопируй свой ID
 
-## 5. Заполни .env
+**Telegram API** (для userbots):
+1. Открой https://my.telegram.org/apps
+2. Создай приложение
+3. Скопируй `api_id` и `api_hash`
+
+### 3. Заполни .env
 
 ```env
-TELOXIDE_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-OWNER_ID=987654321
-DATABASE_URL=sqlite:persona_forge.db
+BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+OWNER_IDS=987654321
+TELEGRAM_API_ID=12345678
+TELEGRAM_API_HASH=abcdef1234567890abcdef1234567890
+DATABASE_URL=sqlite:data/puppeteer.db
+OLLAMA_URL=http://host.docker.internal:11434
 ```
 
-## 6. Запусти!
+### 4. Запусти Ollama
 
 ```bash
-cargo run --release
+ollama serve
+ollama pull llama2
 ```
 
-## 7. Проверь
+### 5. Запусти Puppeteer
 
-1. Открой своего бота в Telegram
-2. Отправь `/start`
-3. Отправь `/menu`
+```bash
+docker-compose up --build
+```
 
-## Что дальше?
+### 6. Добавь первый userbot
 
-- [[Personas|Создай первую персону]]
-- [[Commands|Изучи команды]]
-- [[Mini-App|Настрой веб-панель]]
+1. Открой своего admin-бота в Telegram
+2. Отправь `/add_account`
+3. Следуй инструкциям:
+   - Введи номер телефона (например, +1234567890)
+   - Введи код подтверждения
+   - Введи 2FA пароль (если включен)
+4. Userbot запустится автоматически! 🎉
 
-## Быстрые команды
+## Вариант 2: Ручная сборка
+
+### 1. Установи зависимости
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential cmake gperf libssl-dev zlib1g-dev
+```
+
+**macOS:**
+```bash
+brew install cmake openssl
+```
+
+### 2. Установи Rust
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+```
+
+### 3. Клонируй и собери
+
+```bash
+git clone https://github.com/bobberdolle1/Puppeteer.git
+cd Puppeteer
+cp .env.example .env
+# Отредактируй .env
+cargo build --release
+./target/release/puppeteer
+```
+
+## Команды admin-бота
 
 ```
-/menu              # Главное меню
-/status            # Проверить статус
-/create_persona Тест|Ты тестовая персона  # Создать персону
-/list_personas     # Список персон
+/add_account              # Добавить новый userbot
+/list_accounts            # Список всех аккаунтов
+/start_account <id>       # Запустить userbot
+/stop_account <id>        # Остановить userbot
+/set_prompt <id>          # Изменить системный промпт
+/set_probability <id> <0-100>  # Установить вероятность ответа
+/whitelist_chat <id> <chat_id> # Разрешить userbot в чате
+/status                   # Статус системы
+/help                     # Помощь
+```
+
+## Настройка
+
+### Вероятность ответа
+
+Контролируй как часто userbot отвечает (0-100%):
+```
+/set_probability 1 75  # 75% шанс ответить
+```
+
+### Системный промпт
+
+Кастомизируй AI личность:
+```
+/set_prompt 1
+# Затем отправь свой промпт
+```
+
+### Whitelist чатов
+
+Ограничь userbot определенными чатами:
+```
+/whitelist_chat 1 -1001234567890
 ```
 
 ## Troubleshooting
 
-### Бот не отвечает
+### "Failed to connect to Ollama"
+- Убедись что Ollama запущен: `ollama serve`
+- Проверь `OLLAMA_URL` в `.env`
+- Для Docker: используй `http://host.docker.internal:11434`
 
-1. Проверь что Ollama запущен: `ollama list`
-2. Проверь токен в `.env`
-3. Проверь логи в консоли
+### "Invalid phone format"
+- Используй международный формат: `+1234567890`
+- Включи код страны с `+`
 
-### Ошибка подключения к Ollama
+### "Account already exists"
+- Каждый номер можно добавить только один раз
+- Используй `/list_accounts` чтобы увидеть существующие
 
-```bash
-# Проверь что Ollama работает
-curl http://localhost:11434/api/tags
-
-# Если нет — запусти
-ollama serve
-```
-
-### Ошибка базы данных
-
-```bash
-# Удали старую БД и перезапусти
-rm persona_forge.db
-cargo run --release
-```
+### Docker: "library 'tdjson' not found"
+- Это ожидаемо при локальной сборке
+- Используй Docker для правильной установки TDLib
 
 ---
 
