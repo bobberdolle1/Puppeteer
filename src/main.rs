@@ -37,6 +37,13 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Start spam campaign worker
+    let state_spam = state.clone();
+    tokio::spawn(async move {
+        userbot::spam_campaign_worker(state_spam).await;
+    });
+    tracing::info!("Spam campaign worker started");
+
     tracing::info!("Puppeteer is ready! Starting admin bot...");
 
     // Start admin bot (this will block until shutdown)

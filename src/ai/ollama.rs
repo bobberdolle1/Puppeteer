@@ -12,9 +12,9 @@ pub struct OllamaClient {
 }
 
 impl OllamaClient {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: impl Into<String>) -> Self {
         Self {
-            base_url,
+            base_url: base_url.into(),
             client: reqwest::Client::new(),
         }
     }

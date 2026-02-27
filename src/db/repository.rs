@@ -283,3 +283,250 @@ impl MessageRepository {
         Ok(result.rows_affected())
     }
 }
+
+impl AccountRepository {
+    /// Add a message to history (convenience method)
+    pub async fn add_message(pool: &SqlitePool, new_message: NewMessage) -> Result<MessageHistory> {
+        MessageRepository::create(pool, new_message).await
+    }
+
+    /// Get recent messages for context (convenience method)
+    pub async fn get_recent_messages(
+        pool: &SqlitePool,
+        account_id: i64,
+        chat_id: i64,
+        limit: i64,
+    ) -> Result<Vec<MessageHistory>> {
+        MessageRepository::get_recent_messages(pool, account_id, chat_id, limit).await
+    }
+}
+
+/// Repository for bot group operations
+pub struct BotGroupRepository;
+
+impl BotGroupRepository {
+    /// Create a new bot group
+    pub async fn create(pool: &SqlitePool, new_group: NewBotGroup) -> Result<BotGroup> {
+        let group = sqlx::query_as::<_, BotGroup>(
+            r#"
+            INSERT INTO bot_groups (name, description)
+            VALUES (?, ?)
+            RETURNING *
+            "#,
+        )
+        .bind(&new_group.name)
+        .bind(&new_group.description)
+        .fetch_one(pool)
+        .await
+        .context("Failed to create bot group")?;
+
+        tracing::info!("Created bot group '{}' with ID {}", group.name, group.id);
+        Ok(group)
+    }
+
+    /// Get a bot group by ID
+    pub async fn get_by_id(pool: &SqlitePool, id: i64) -> Result<Option<BotGroup>> {
+        let group = sqlx::query_as::<_, BotGroup>(
+            "SELECT * FROM bot_groups WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .context("Failed to fetch bot group")?;
+
+        Ok(group)
+    }
+
+    /// List all bot groups
+    pub async fn list_all(pool: &SqlitePool) -> Result<Vec<BotGroup>> {
+        let groups = sqlx::query_as::<_, BotGroup>(
+            "SELECT * FROM bot_groups ORDER BY created_at DESC"
+        )
+        .fetch_all(pool)
+        .await
+        .context("Failed to list bot groups")?;
+
+        Ok(groups)
+    }
+
+    /// Add an account to a bot group
+    pub async fn add_member(pool: &SqlitePool, group_id: i64, account_id: i64) -> Result<()> {
+        sqlx::query(
+            "INSERT OR IGNORE INTO bot_group_members (group_id, account_id) VALUES (?, ?)"
+        )
+        .bind(group_id)
+        .bind(account_id)
+        .execute(pool)
+        .await
+        .context("Failed to add member to bot group")?;
+
+        tracing::info!("Added account {} to bot group {}", account_id, group_id);
+        Ok(())
+    }
+
+    /// Remove an account from a bot group
+    pub async fn remove_member(pool: &SqlitePool, group_id: i64, account_id: i64) -> Result<()> {
+        sqlx::query(
+            "DELETE FROM bot_group_members WHERE group_id = ? AND account_id = ?"
+        )
+        .bind(group_id)
+        .bind(account_id)
+        .execute(pool)
+        .await
+        .context("Failed to remove member from bot group")?;
+
+        tracing::info!("Removed account {} from bot group {}", account_id, group_id);
+        Ok(())
+    }
+
+    /// Get all members of a bot group
+    pub async fn get_members(pool: &SqlitePool, group_id: i64) -> Result<Vec<Account>> {
+        let accounts = sqlx::query_as::<_, Account>(
+            r#"
+            SELECT a.* FROM accounts a
+            INNER JOIN bot_group_members bgm ON a.id = bgm.account_id
+            WHERE bgm.group_id = ?
+            ORDER BY a.id
+            "#,
+        )
+        .bind(group_id)
+        .fetch_all(pool)
+        .await
+        .context("Failed to fetch bot group members")?;
+
+        Ok(accounts)
+    }
+
+    /// Delete a bot group
+    pub async fn delete(pool: &SqlitePool, group_id: i64) -> Result<()> {
+        sqlx::query("DELETE FROM bot_groups WHERE id = ?")
+            .bind(group_id)
+            .execute(pool)
+            .await
+            .context("Failed to delete bot group")?;
+
+        tracing::info!("Deleted bot group {}", group_id);
+        Ok(())
+    }
+}
+
+/// Repository for spam campaign operations
+pub struct SpamCampaignRepository;
+
+impl SpamCampaignRepository {
+    /// Create a new spam campaign
+    pub async fn create(pool: &SqlitePool, new_campaign: NewSpamCampaign) -> Result<SpamCampaign> {
+        let campaign = sqlx::query_as::<_, SpamCampaign>(
+            r#"
+            INSERT INTO spam_campaigns (
+                name, group_id, target_type, target_id, message_text,
+                media_path, media_type, repeat_count, delay_between_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING *
+            "#,
+        )
+        .bind(&new_campaign.name)
+        .bind(new_campaign.group_id)
+        .bind(&new_campaign.target_type)
+        .bind(new_campaign.target_id)
+        .bind(&new_campaign.message_text)
+        .bind(&new_campaign.media_path)
+        .bind(&new_campaign.media_type)
+        .bind(new_campaign.repeat_count)
+        .bind(new_campaign.delay_between_ms)
+        .fetch_one(pool)
+        .await
+        .context("Failed to create spam campaign")?;
+
+        tracing::info!("Created spam campaign '{}' with ID {}", campaign.name, campaign.id);
+        Ok(campaign)
+    }
+
+    /// Get a spam campaign by ID
+    pub async fn get_by_id(pool: &SqlitePool, id: i64) -> Result<Option<SpamCampaign>> {
+        let campaign = sqlx::query_as::<_, SpamCampaign>(
+            "SELECT * FROM spam_campaigns WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .context("Failed to fetch spam campaign")?;
+
+        Ok(campaign)
+    }
+
+    /// List all spam campaigns
+    pub async fn list_all(pool: &SqlitePool) -> Result<Vec<SpamCampaign>> {
+        let campaigns = sqlx::query_as::<_, SpamCampaign>(
+            "SELECT * FROM spam_campaigns ORDER BY created_at DESC"
+        )
+        .fetch_all(pool)
+        .await
+        .context("Failed to list spam campaigns")?;
+
+        Ok(campaigns)
+    }
+
+    /// List pending spam campaigns
+    pub async fn list_pending(pool: &SqlitePool) -> Result<Vec<SpamCampaign>> {
+        let campaigns = sqlx::query_as::<_, SpamCampaign>(
+            "SELECT * FROM spam_campaigns WHERE status = 'pending' ORDER BY created_at"
+        )
+        .fetch_all(pool)
+        .await
+        .context("Failed to list pending spam campaigns")?;
+
+        Ok(campaigns)
+    }
+
+    /// Update campaign status
+    pub async fn update_status(pool: &SqlitePool, campaign_id: i64, status: &str) -> Result<()> {
+        let now = chrono::Utc::now();
+        
+        let query = match status {
+            "running" => {
+                sqlx::query(
+                    "UPDATE spam_campaigns SET status = ?, started_at = ? WHERE id = ?"
+                )
+                .bind(status)
+                .bind(now)
+                .bind(campaign_id)
+            }
+            "completed" | "stopped" => {
+                sqlx::query(
+                    "UPDATE spam_campaigns SET status = ?, completed_at = ? WHERE id = ?"
+                )
+                .bind(status)
+                .bind(now)
+                .bind(campaign_id)
+            }
+            _ => {
+                sqlx::query(
+                    "UPDATE spam_campaigns SET status = ? WHERE id = ?"
+                )
+                .bind(status)
+                .bind(campaign_id)
+            }
+        };
+
+        query.execute(pool)
+            .await
+            .context("Failed to update campaign status")?;
+
+        tracing::info!("Updated campaign {} status to {}", campaign_id, status);
+        Ok(())
+    }
+
+    /// Delete a spam campaign
+    pub async fn delete(pool: &SqlitePool, campaign_id: i64) -> Result<()> {
+        sqlx::query("DELETE FROM spam_campaigns WHERE id = ?")
+            .bind(campaign_id)
+            .execute(pool)
+            .await
+            .context("Failed to delete spam campaign")?;
+
+        tracing::info!("Deleted spam campaign {}", campaign_id);
+        Ok(())
+    }
+}

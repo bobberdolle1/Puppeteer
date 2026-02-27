@@ -1,6 +1,7 @@
 pub mod dialogues;
 pub mod handlers;
 pub mod middleware;
+pub mod group_commands;
 
 use crate::AppState;
 use anyhow::Result;

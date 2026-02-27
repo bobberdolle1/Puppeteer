@@ -27,6 +27,27 @@ pub enum Command {
     Stop,
     #[command(description = "Delete an account from database (usage: /delete <id>)")]
     Delete,
+    
+    // Bot group commands
+    #[command(description = "Create bot group (usage: /create_group <name> [desc])")]
+    CreateGroup,
+    #[command(description = "List all bot groups")]
+    ListGroups,
+    #[command(description = "Add account to group (usage: /add_to_group <group_id> <account_id>)")]
+    AddToGroup,
+    
+    // Spam campaign commands
+    #[command(description = "Create spam campaign (usage: /spam <group_id|all> <type> <target_id> <repeat> <delay_ms> <text>)")]
+    Spam,
+    #[command(description = "List spam campaigns")]
+    ListCampaigns,
+    #[command(description = "Stop campaign (usage: /stop_campaign <id>)")]
+    StopCampaign,
+    
+    // Direct messaging
+    #[command(description = "Send DM from bot (usage: /dm <account_id> <user_id> <text>)")]
+    Dm,
+    
     #[command(description = "Show help message")]
     Help,
 }
@@ -38,6 +59,10 @@ pub async fn handle_command(
     state: AppState,
     dialogue: AddAccountDialogue,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Parse command arguments
+    let text = msg.text().unwrap_or("");
+    let args: Vec<String> = text.split_whitespace().skip(1).map(|s| s.to_string()).collect();
+    
     match cmd {
         Command::Start => handle_start(bot, msg, state).await?,
         Command::AddAccount => handle_add_account(bot, msg, dialogue).await?,
@@ -48,6 +73,20 @@ pub async fn handle_command(
         Command::RemoveChat => handle_remove_chat(bot, msg, state).await?,
         Command::Stop => handle_stop(bot, msg, state).await?,
         Command::Delete => handle_delete(bot, msg, state).await?,
+        
+        // Bot group commands
+        Command::CreateGroup => crate::bot::group_commands::handle_create_group(bot, msg, state, args).await?,
+        Command::ListGroups => crate::bot::group_commands::handle_list_groups(bot, msg, state).await?,
+        Command::AddToGroup => crate::bot::group_commands::handle_add_to_group(bot, msg, state, args).await?,
+        
+        // Spam campaign commands
+        Command::Spam => crate::bot::group_commands::handle_create_spam(bot, msg, state, args).await?,
+        Command::ListCampaigns => crate::bot::group_commands::handle_list_campaigns(bot, msg, state).await?,
+        Command::StopCampaign => crate::bot::group_commands::handle_stop_campaign(bot, msg, state, args).await?,
+        
+        // Direct messaging
+        Command::Dm => crate::bot::group_commands::handle_dm(bot, msg, state, args).await?,
+        
         Command::Help => handle_help(bot, msg).await?,
     }
     Ok(())
