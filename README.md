@@ -2,7 +2,7 @@
 
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Build Status](https://github.com/yourusername/puppeteer/workflows/Rust/badge.svg)](https://github.com/yourusername/puppeteer/actions)
+[![Build Status](https://github.com/bobberdolle1/Puppeteer/workflows/Rust/badge.svg)](https://github.com/bobberdolle1/Puppeteer/actions)
 [![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](docker-compose.yml)
 
 **Multi-account Telegram userbot orchestration system powered by AI for human-like interactions.**
@@ -78,8 +78,8 @@ graph TB
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/yourusername/puppeteer.git
-cd puppeteer
+git clone https://github.com/bobberdolle1/Puppeteer.git
+cd Puppeteer
 ```
 
 2. **Configure environment**:
@@ -245,8 +245,8 @@ This software is provided for educational and research purposes only. Users are 
 ## 📧 Support
 
 For questions and support:
-- Open an [issue](https://github.com/yourusername/puppeteer/issues)
-- Check existing [discussions](https://github.com/yourusername/puppeteer/discussions)
+- Open an [issue](https://github.com/bobberdolle1/Puppeteer/issues)
+- Check existing [discussions](https://github.com/bobberdolle1/Puppeteer/discussions)
 
 ---
 
