@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/bobberdolle1/Puppeteer/main/.github/assets/logo.svg" alt="Puppeteer Logo" width="200"/>
-
 # 🎭 Puppeteer
 
 ### *The Ultimate AI-Powered Telegram Userbot Orchestration System*
@@ -29,8 +27,6 @@
   <a href="#-architecture">Architecture</a> •
   <a href="#-contributing">Contributing</a>
 </p>
-
-<img src="https://user-images.githubusercontent.com/placeholder/demo.gif" alt="Demo" width="800"/>
 
 ---
 
@@ -781,30 +777,14 @@ See [LICENSE](LICENSE) for details
 
 ## 🙏 Acknowledgments
 
-<table>
-<tr>
-<td align="center" width="25%">
-<img src="https://raw.githubusercontent.com/tdlib/td/master/docs/telegram.svg" width="60"/><br/>
-<b>TDLib</b><br/>
-<sub>Telegram Database Library</sub>
-</td>
-<td align="center" width="25%">
-<img src="https://ollama.ai/public/ollama.png" width="60"/><br/>
-<b>Ollama</b><br/>
-<sub>Local LLM Inference</sub>
-</td>
-<td align="center" width="25%">
-<img src="https://raw.githubusercontent.com/teloxide/teloxide/master/media/teloxide-logo.svg" width="60"/><br/>
-<b>teloxide</b><br/>
-<sub>Telegram Bot Framework</sub>
-</td>
-<td align="center" width="25%">
-<img src="https://www.rust-lang.org/logos/rust-logo-512x512.png" width="60"/><br/>
-<b>Rust</b><br/>
-<sub>Systems Programming Language</sub>
-</td>
-</tr>
-</table>
+Special thanks to the amazing open-source projects that made Puppeteer possible:
+
+- **[TDLib](https://github.com/tdlib/td)** - Telegram Database Library for MTProto
+- **[Ollama](https://ollama.ai/)** - Local LLM inference engine
+- **[teloxide](https://github.com/teloxide/teloxide)** - Elegant Telegram Bot framework for Rust
+- **[rust-tdlib](https://github.com/antonio-antuan/rust-tdlib)** - Rust wrapper for TDLib
+- **[SQLx](https://github.com/launchbadge/sqlx)** - Async SQL toolkit for Rust
+- **[Tokio](https://tokio.rs/)** - Asynchronous runtime for Rust
 
 ---
 
