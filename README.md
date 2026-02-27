@@ -843,6 +843,6 @@ Special thanks to the amazing open-source projects that made Puppeteer possible:
 
 ---
 
-<sub>© 2024 Puppeteer. All rights reserved.</sub>
+<sub>© 2026 Puppeteer. All rights reserved.</sub>
 
 </div>
