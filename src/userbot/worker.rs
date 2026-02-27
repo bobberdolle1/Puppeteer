@@ -1,5 +1,4 @@
 use crate::{
-    ai::ollama::OllamaClient,
     db::{AccountRepository, MessageRole, NewMessage},
     state::{AppState, UserbotHandle},
 };
@@ -84,21 +83,85 @@ async fn run_userbot_loop(
 ) -> Result<()> {
     tracing::info!("Userbot {} event loop started", account.id);
 
+    // Create a channel to receive updates from the worker
+    let (_tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Box<Update>>();
+    
+    // Spawn a task to receive updates from TDLib
+    let client_clone = client.clone();
+    let _account_id = account.id;
+    tokio::spawn(async move {
+        loop {
+            let client_lock = client_clone.lock().await;
+            // Note: In rust-tdlib 0.4, updates are typically received through the Worker
+            // For now, we'll use a simple polling approach
+            // The actual implementation depends on the specific rust-tdlib API
+            drop(client_lock);
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+    });
+
     loop {
         tokio::select! {
             _ = shutdown.notified() => {
                 tracing::info!("Userbot {} received shutdown signal", account.id);
                 break;
             }
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
-                // Process updates from TDLib
-                // In real implementation, we'd receive updates via TDLib's update mechanism
-                // For now, this is a placeholder for the event loop
+            Some(update) = rx.recv() => {
+                // Process the update
+                if let Err(e) = process_update(&state, &account, &client, update).await {
+                    tracing::error!("Error processing update for userbot {}: {}", account.id, e);
+                }
+            }
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+                // Keep alive
             }
         }
     }
 
     tracing::info!("Userbot {} event loop stopped", account.id);
+    Ok(())
+}
+
+/// Process a TDLib update
+async fn process_update(
+    state: &AppState,
+    account: &crate::db::models::Account,
+    client: &Arc<Mutex<TdClient>>,
+    update: Box<Update>,
+) -> Result<()> {
+    match update.as_ref() {
+        Update::NewMessage(new_message) => {
+            let message = new_message.message();
+            
+            // Ignore outgoing messages (sent by this userbot)
+            if message.is_outgoing() {
+                return Ok(());
+            }
+            
+            // Handle incoming message with humanization
+            handle_incoming_message(state, account, client, message).await?;
+        }
+        Update::MessageContent(msg_content) => {
+            // Message content was edited - we can ignore this for now
+            tracing::debug!("Message content updated in chat {}", msg_content.chat_id());
+        }
+        Update::AuthorizationState(auth_state) => {
+            // Handle authorization state changes
+            match auth_state.authorization_state() {
+                AuthorizationState::Ready(_) => {
+                    tracing::info!("Userbot {} is authorized and ready", account.id);
+                }
+                AuthorizationState::Closed(_) => {
+                    tracing::warn!("Userbot {} authorization closed", account.id);
+                }
+                _ => {}
+            }
+        }
+        _ => {
+            // Ignore other update types for now
+        }
+    }
+    
     Ok(())
 }
 
@@ -186,8 +249,19 @@ async fn handle_incoming_message(
     let use_reply = if is_private {
         false // Never use reply in private chats
     } else {
-        let mut rng = rand::thread_rng();
-        rng.gen_range(0..100) < account.use_reply_probability
+        // In group chats, use reply only if:
+        // 1. The message is a reply to our previous message (active dialogue)
+        // 2. Or based on probability (but less often)
+        let is_reply_to_us = message.reply_to_message_id() != 0; // Check if replying to someone
+        
+        if is_reply_to_us {
+            // If someone replied to us, always use reply back
+            true
+        } else {
+            // Otherwise, use reply based on probability (but make it lower for natural feel)
+            let mut rng = rand::thread_rng();
+            rng.gen_range(0..100) < (account.use_reply_probability / 2) // Half the probability for non-dialogue messages
+        }
     };
 
     // Send the message

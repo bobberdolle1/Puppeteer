@@ -3,7 +3,7 @@ use crate::{
     AppState,
 };
 use anyhow::Result;
-use teloxide::{prelude::*, types::InputFile};
+use teloxide::prelude::*;
 
 /// Create a new bot group
 /// Usage: /create_group <name> [description]
@@ -166,7 +166,7 @@ pub async fn handle_create_spam(
 pub async fn handle_create_spam_media(
     bot: Bot,
     msg: Message,
-    state: AppState,
+    _state: AppState,
     args: Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if args.len() < 6 {
