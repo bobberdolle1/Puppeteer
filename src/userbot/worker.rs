@@ -9,10 +9,53 @@ use rust_tdlib::{
     types::*,
 };
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::collections::HashMap;
+use tokio::sync::{Mutex, RwLock};
 
 type TdClient = Client<TdJson>;
 type TdWorker = Worker<ConsoleAuthStateHandler, TdJson>;
+
+// Rate limiting: track message timestamps per user
+lazy_static::lazy_static! {
+    static ref USER_MESSAGE_TIMESTAMPS: Arc<RwLock<HashMap<i64, Vec<i64>>>> = 
+        Arc::new(RwLock::new(HashMap::new()));
+}
+
+// Casual responses for stickers
+const STICKER_RESPONSES: &[&str] = &["ахах", "жиза", "норм", "кек", "лол", "хд"];
+
+/// Default advanced adaptive system prompt for human-like behavior with extreme dryness
+pub const DEFAULT_SYSTEM_PROMPT: &str = r#"[КТО ТЫ]
+Ты обычный, немного уставший пользователь Telegram. Ты общаешься максимально сухо, без эмоций и без попыток быть вежливым.
+
+[ТВОЙ СТИЛЬ (СТРОГИЕ ПРАВИЛА)]
+- НИКАКИХ ЭМОДЗИ. Вообще. Максимум, что ты можешь использовать для эмоций — это скобки ")" или "(", либо текстовые реакции: "пхпх", "мда", "треш", "жесть".
+- Короткие ответы. Никакой воды. Строчная буква, без точек в конце.
+- Если мыслей несколько — разделяй их символом `||`.
+- Если собеседник пишет что-то, не требующее ответа (например: "ок", "понял", "спс", "давай", "до завтра"), ты ОБЯЗАН вернуть ровно одно слово: `<IGNORE>`. Это команда системе ничего не отправлять. Не пиши "пожалуйста" или "обращайся". Просто `<IGNORE>`.
+- Если собеседник пишет откровенный бред или просто кидает гифку без контекста, реагируй сухо: "и че", "мда", "?" или тоже верни `<IGNORE>`.
+
+[ПРИМЕРЫ]
+User: слушай, я там код запушил, глянешь?
+Assistant: да, ща посмотрю || минут через 20
+
+User: все, я пофиксил баг
+Assistant: ок
+
+User: спасибо бро выручил
+Assistant: <IGNORE>
+
+User: [Пользователь отправил стикер]
+Assistant: <IGNORE>
+
+User: ну и че мы делать будем с этой базой данных?
+Assistant: хз вообще || надо думать || я бы снес ее нахрен и заново поднял"#;
+
+// Rate limiting: track message timestamps per user
+lazy_static::lazy_static! {
+    static ref USER_MESSAGE_TIMESTAMPS: Arc<RwLock<HashMap<i64, Vec<i64>>>> = 
+        Arc::new(RwLock::new(HashMap::new()));
+}
 
 pub async fn spawn_userbot(state: AppState, account_id: i64) -> Result<()> {
     if state.is_userbot_running(account_id).await {
@@ -166,6 +209,7 @@ async fn process_update(
 }
 
 /// Handle incoming message with humanization
+/// Handle incoming message with extreme humanization
 async fn handle_incoming_message(
     state: &AppState,
     account: &crate::db::models::Account,
@@ -176,11 +220,17 @@ async fn handle_incoming_message(
     let chat_id = message.chat_id();
     let message_id = message.id();
     let message_date = message.date();
-    
-    // Get message text
+
+    // Get message text or media context
     let text = match message.content() {
         MessageContent::MessageText(msg_text) => msg_text.text().text().to_string(),
-        _ => return Ok(()), // Ignore non-text messages for now
+        MessageContent::MessageSticker(_) => "[Пользователь отправил стикер]".to_string(),
+        MessageContent::MessageAnimation(_) => "[Пользователь отправил GIF]".to_string(),
+        MessageContent::MessagePhoto(_) => "[Пользователь отправил фото]".to_string(),
+        MessageContent::MessageVideo(_) => "[Пользователь отправил видео]".to_string(),
+        MessageContent::MessageVoiceNote(_) => "[Пользователь отправил голосовое сообщение]".to_string(),
+        MessageContent::MessageVideoNote(_) => "[Пользователь отправил видеосообщение]".to_string(),
+        _ => return Ok(()), // Ignore other message types
     };
 
     // Check if message is too old
@@ -212,27 +262,28 @@ async fn handle_incoming_message(
         return Ok(());
     }
 
-    // Calculate humanized delays
-    let response_delay = calculate_response_delay(account, &text);
-    let typing_duration = calculate_typing_duration(account, &text);
-
-    // Wait before starting to "read" the message
-    tokio::time::sleep(tokio::time::Duration::from_secs(response_delay as u64)).await;
-
-    // Send typing indicator
+    // IMMEDIATELY mark message as read (simulate instant read receipt)
     let client_lock = client.lock().await;
-    let send_action = SendChatAction::builder()
+    let view_messages = ViewMessages::builder()
         .chat_id(chat_id)
-        .action(ChatAction::Typing(ChatActionTyping::builder().build()))
+        .message_ids(vec![message_id])
+        .force_read(true)
         .build();
-    
-    if let Err(e) = client_lock.send_chat_action(&send_action).await {
-        tracing::warn!("Failed to send typing indicator: {}", e);
+
+    if let Err(e) = client_lock.view_messages(&view_messages).await {
+        tracing::warn!("Failed to mark message as read: {}", e);
     }
     drop(client_lock);
 
-    // "Type" the response
-    tokio::time::sleep(tokio::time::Duration::from_secs(typing_duration as u64)).await;
+    // Random "Read Delay" - simulate user reading and thinking (5-60 seconds)
+    let mut rng = rand::thread_rng();
+    let read_delay = rng.gen_range(5..=60);
+    tracing::debug!("Read delay: {}s for chat {}", read_delay, chat_id);
+    tokio::time::sleep(tokio::time::Duration::from_secs(read_delay)).await;
+
+    // Calculate additional response delay based on message length
+    let response_delay = calculate_response_delay(account, &text);
+    tokio::time::sleep(tokio::time::Duration::from_secs(response_delay as u64)).await;
 
     // Generate AI response
     let response_text = match generate_ai_response(state, account, chat_id, &text).await {
@@ -245,6 +296,25 @@ async fn handle_incoming_message(
         }
     };
 
+    // Check if AI returned <IGNORE> - if so, don't send anything
+    if response_text.trim() == "<IGNORE>" {
+        tracing::info!("Userbot {} ignoring message in chat {} (AI returned <IGNORE>)", account.id, chat_id);
+        return Ok(());
+    }
+
+    // Split response by || for multi-texting
+    let message_chunks: Vec<&str> = response_text
+        .split("||")
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty() && *s != "<IGNORE>")
+        .collect();
+
+    // If no chunks (empty response), skip
+    if message_chunks.is_empty() {
+        tracing::warn!("Empty response after splitting for userbot {}", account.id);
+        return Ok(());
+    }
+
     // Decide whether to use reply or regular message
     let use_reply = if is_private {
         false // Never use reply in private chats
@@ -253,7 +323,7 @@ async fn handle_incoming_message(
         // 1. The message is a reply to our previous message (active dialogue)
         // 2. Or based on probability (but less often)
         let is_reply_to_us = message.reply_to_message_id() != 0; // Check if replying to someone
-        
+
         if is_reply_to_us {
             // If someone replied to us, always use reply back
             true
@@ -264,34 +334,103 @@ async fn handle_incoming_message(
         }
     };
 
-    // Send the message
-    let client_lock = client.lock().await;
-    
-    let input_message = InputMessageContent::InputMessageText(
-        InputMessageText::builder()
-            .text(FormattedText::builder().text(response_text.clone()).build())
-            .build()
-    );
+    // 20% chance of "distracted typist" behavior
+    let mut rng = rand::thread_rng();
+    let is_distracted = rng.gen_range(0..100) < 20;
 
-    let mut send_message_builder = SendMessage::builder();
-    send_message_builder
-        .chat_id(chat_id)
-        .input_message_content(input_message);
+    if is_distracted {
+        tracing::debug!("Distracted typist behavior triggered for userbot {}", account.id);
 
-    // Add reply if needed
-    if use_reply {
-        send_message_builder.reply_to_message_id(message_id);
+        // Start typing
+        let client_lock = client.lock().await;
+        let send_action = SendChatAction::builder()
+            .chat_id(chat_id)
+            .action(ChatAction::Typing(ChatActionTyping::builder().build()))
+            .build();
+
+        if let Err(e) = client_lock.send_chat_action(&send_action).await {
+            tracing::warn!("Failed to send typing indicator: {}", e);
+        }
+        drop(client_lock);
+
+        // Type for a bit (2-4 seconds)
+        let distracted_typing_duration = rng.gen_range(2..=4);
+        tokio::time::sleep(tokio::time::Duration::from_secs(distracted_typing_duration)).await;
+
+        // Cancel typing (send cancel action)
+        let client_lock = client.lock().await;
+        let cancel_action = SendChatAction::builder()
+            .chat_id(chat_id)
+            .action(ChatAction::Cancel(ChatActionCancel::builder().build()))
+            .build();
+
+        if let Err(e) = client_lock.send_chat_action(&cancel_action).await {
+            tracing::warn!("Failed to cancel typing: {}", e);
+        }
+        drop(client_lock);
+
+        // Pause (distracted - 3-10 seconds)
+        let distracted_pause = rng.gen_range(3..=10);
+        tokio::time::sleep(tokio::time::Duration::from_secs(distracted_pause)).await;
     }
 
-    let send_message = send_message_builder.build();
+    // Send each chunk as a separate message with typing indicators
+    for (idx, chunk) in message_chunks.iter().enumerate() {
+        // Calculate typing duration for this chunk
+        let typing_duration = calculate_typing_duration(account, chunk);
 
-    if let Err(e) = client_lock.send_message(&send_message).await {
-        tracing::error!("Failed to send message: {}", e);
-        notify_owner(state, &format!("❌ Userbot {} failed to send message: {}", account.id, e)).await?;
-        return Ok(());
+        // Send typing indicator
+        let client_lock = client.lock().await;
+        let send_action = SendChatAction::builder()
+            .chat_id(chat_id)
+            .action(ChatAction::Typing(ChatActionTyping::builder().build()))
+            .build();
+
+        if let Err(e) = client_lock.send_chat_action(&send_action).await {
+            tracing::warn!("Failed to send typing indicator: {}", e);
+        }
+        drop(client_lock);
+
+        // "Type" the response
+        tokio::time::sleep(tokio::time::Duration::from_secs(typing_duration as u64)).await;
+
+        // Send the message chunk
+        let client_lock = client.lock().await;
+
+        let input_message = InputMessageContent::InputMessageText(
+            InputMessageText::builder()
+                .text(FormattedText::builder().text(chunk.to_string()).build())
+                .build()
+        );
+
+        let mut send_message_builder = SendMessage::builder();
+        send_message_builder
+            .chat_id(chat_id)
+            .input_message_content(input_message);
+
+        // Add reply only to the first chunk if needed
+        if use_reply && idx == 0 {
+            send_message_builder.reply_to_message_id(message_id);
+        }
+
+        let send_message = send_message_builder.build();
+
+        if let Err(e) = client_lock.send_message(&send_message).await {
+            tracing::error!("Failed to send message chunk {}: {}", idx, e);
+            notify_owner(state, &format!("❌ Userbot {} failed to send message chunk: {}", account.id, e)).await?;
+            drop(client_lock);
+            return Ok(());
+        }
+
+        drop(client_lock);
+
+        // Add a small random pause between chunks (0.5s - 1.5s)
+        if idx < message_chunks.len() - 1 {
+            let mut rng = rand::thread_rng();
+            let pause_ms = rng.gen_range(500..=1500);
+            tokio::time::sleep(tokio::time::Duration::from_millis(pause_ms)).await;
+        }
     }
-
-    drop(client_lock);
 
     // Save to message history
     let new_message = NewMessage {
@@ -300,12 +439,12 @@ async fn handle_incoming_message(
         role: MessageRole::Assistant,
         content: response_text,
     };
-    
+
     if let Err(e) = AccountRepository::add_message(&state.db_pool, new_message).await {
         tracing::warn!("Failed to save message to history: {}", e);
     }
 
-    tracing::info!("Userbot {} responded in chat {}", account.id, chat_id);
+    tracing::info!("Userbot {} responded in chat {} with {} chunks", account.id, chat_id, message_chunks.len());
     Ok(())
 }
 
@@ -398,3 +537,208 @@ async fn notify_owner(state: &AppState, message: &str) -> Result<()> {
     Ok(())
 }
 
+
+/// Process photo with vision model
+async fn process_photo(
+    state: &AppState,
+    client: &Arc<Mutex<TdClient>>,
+    photo: &MessagePhoto,
+) -> Result<String> {
+    // Get the largest photo size
+    let photo_size = photo.photo().sizes().iter()
+        .max_by_key(|s| s.width() * s.height())
+        .context("No photo sizes available")?;
+    
+    let file_id = photo_size.photo().id();
+    
+    // Download the photo
+    let file_path = download_file(client, file_id).await?;
+    
+    // Read and encode to base64
+    let image_bytes = tokio::fs::read(&file_path).await?;
+    use base64::Engine;
+    let base64_image = base64::engine::general_purpose::STANDARD.encode(&image_bytes);
+    
+    // Analyze with vision model
+    let ollama_client = crate::ai::ollama::OllamaClient::new(state.config.ollama_url.clone());
+    let description = ollama_client.vision(
+        "llava", // or minicpm-v
+        "Опиши что на этом изображении. Будь кратким, 1-2 предложения.",
+        vec![base64_image],
+    ).await?;
+    
+    // Clean up temp file
+    let _ = tokio::fs::remove_file(file_path).await;
+    
+    Ok(description)
+}
+
+/// Process animation/GIF with vision model (extract 3 frames)
+async fn process_animation(
+    state: &AppState,
+    client: &Arc<Mutex<TdClient>>,
+    animation: &MessageAnimation,
+) -> Result<String> {
+    let file_id = animation.animation().animation().id();
+    
+    // Download the animation
+    let file_path = download_file(client, file_id).await?;
+    
+    // Extract 3 frames (start, middle, end)
+    let frames = extract_video_frames(&file_path, 3).await?;
+    
+    // Encode frames to base64
+    let mut base64_frames = Vec::new();
+    for frame_path in &frames {
+        let frame_bytes = tokio::fs::read(frame_path).await?;
+        base64_frames.push(base64::encode(&frame_bytes));
+    }
+    
+    // Analyze with vision model
+    let ollama_client = crate::ai::ollama::OllamaClient::new(state.config.ollama_url.clone());
+    let description = ollama_client.vision(
+        "llava",
+        "Опиши что происходит в этой гифке/анимации. Будь кратким, 1-2 предложения.",
+        base64_frames,
+    ).await?;
+    
+    // Clean up temp files
+    let _ = tokio::fs::remove_file(file_path).await;
+    for frame_path in frames {
+        let _ = tokio::fs::remove_file(frame_path).await;
+    }
+    
+    Ok(description)
+}
+
+/// Process voice message with Whisper
+async fn process_voice(
+    state: &AppState,
+    client: &Arc<Mutex<TdClient>>,
+    voice: &MessageVoiceNote,
+) -> Result<String> {
+    let file_id = voice.voice_note().voice().id();
+    
+    // Download the voice file
+    let file_path = download_file(client, file_id).await?;
+    
+    // Transcribe with Whisper
+    let whisper_url = state.config.whisper_url.as_ref()
+        .context("Whisper URL not configured")?;
+    
+    let transcription = crate::ai::whisper::transcribe_audio(
+        whisper_url,
+        std::path::Path::new(&file_path),
+    ).await?;
+    
+    // Clean up temp file
+    let _ = tokio::fs::remove_file(file_path).await;
+    
+    Ok(transcription)
+}
+
+/// Process video note/circle (extract 3 frames)
+async fn process_video_note(
+    state: &AppState,
+    client: &Arc<Mutex<TdClient>>,
+    video_note: &MessageVideoNote,
+) -> Result<String> {
+    let file_id = video_note.video_note().video().id();
+    
+    // Download the video note
+    let file_path = download_file(client, file_id).await?;
+    
+    // Extract 3 frames (start, middle, end)
+    let frames = extract_video_frames(&file_path, 3).await?;
+    
+    // Encode frames to base64
+    let mut base64_frames = Vec::new();
+    for frame_path in &frames {
+        let frame_bytes = tokio::fs::read(frame_path).await?;
+        base64_frames.push(base64::encode(&frame_bytes));
+    }
+    
+    // Analyze with vision model
+    let ollama_client = crate::ai::ollama::OllamaClient::new(state.config.ollama_url.clone());
+    let description = ollama_client.vision(
+        "llava",
+        "Опиши что происходит в этом видео кружке. Будь кратким, 1-2 предложения.",
+        base64_frames,
+    ).await?;
+    
+    // Clean up temp files
+    let _ = tokio::fs::remove_file(file_path).await;
+    for frame_path in frames {
+        let _ = tokio::fs::remove_file(frame_path).await;
+    }
+    
+    Ok(description)
+}
+
+/// Download file from TDLib
+async fn download_file(client: &Arc<Mutex<TdClient>>, file_id: i32) -> Result<String> {
+    let client_lock = client.lock().await;
+    
+    let download_file = DownloadFile::builder()
+        .file_id(file_id)
+        .priority(32)
+        .synchronous(true)
+        .build();
+    
+    let file = client_lock.download_file(&download_file).await?;
+    let local_path = file.local().path().to_string();
+    
+    drop(client_lock);
+    
+    Ok(local_path)
+}
+
+/// Extract frames from video file using ffmpeg
+async fn extract_video_frames(video_path: &str, num_frames: usize) -> Result<Vec<String>> {
+    use tokio::process::Command;
+    
+    let mut frame_paths = Vec::new();
+    
+    // Get video duration first
+    let duration_output = Command::new("ffprobe")
+        .args(&[
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path,
+        ])
+        .output()
+        .await?;
+    
+    let duration_str = String::from_utf8_lossy(&duration_output.stdout);
+    let duration: f64 = duration_str.trim().parse()
+        .context("Failed to parse video duration")?;
+    
+    // Extract frames at evenly spaced intervals
+    for i in 0..num_frames {
+        let timestamp = if num_frames == 1 {
+            duration / 2.0
+        } else {
+            (duration / (num_frames - 1) as f64) * i as f64
+        };
+        
+        let frame_path = format!("/tmp/frame_{}_{}.jpg", 
+            std::process::id(), 
+            rand::random::<u32>());
+        
+        Command::new("ffmpeg")
+            .args(&[
+                "-ss", &timestamp.to_string(),
+                "-i", video_path,
+                "-vframes", "1",
+                "-q:v", "2",
+                &frame_path,
+            ])
+            .output()
+            .await?;
+        
+        frame_paths.push(frame_path);
+    }
+    
+    Ok(frame_paths)
+}

@@ -56,6 +56,39 @@ impl OllamaClient {
 
         Ok(final_response)
     }
+
+    /// Call Ollama vision API with image(s)
+    pub async fn vision(&self, model: &str, prompt: &str, images: Vec<String>) -> Result<String> {
+        let url = format!("{}/api/generate", self.base_url);
+
+        let request = OllamaVisionRequest {
+            model: model.to_string(),
+            prompt: prompt.to_string(),
+            images,
+            stream: false,
+        };
+
+        let response = self
+            .client
+            .post(&url)
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send vision request to Ollama")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Ollama Vision API error {}: {}", status, error_text);
+        }
+
+        let result: OllamaVisionResponse = response
+            .json()
+            .await
+            .context("Failed to parse Ollama vision response")?;
+
+        Ok(result.response)
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -81,6 +114,19 @@ struct OllamaChatResponse {
 struct OllamaMessageResponse {
     role: String,
     content: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct OllamaVisionRequest {
+    model: String,
+    prompt: String,
+    images: Vec<String>, // Base64-encoded images
+    stream: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaVisionResponse {
+    response: String,
 }
 
 /// Generate a response using Ollama with conversation context
