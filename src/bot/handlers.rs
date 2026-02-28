@@ -100,25 +100,19 @@ async fn handle_start(
     let active_count = state.active_userbot_count().await;
     let all_accounts = AccountRepository::list_all(&state.db_pool).await?;
     
-    let mut total_messages = 0i64;
-    for account in &all_accounts {
-        total_messages += MessageRepository::count_by_account(&state.db_pool, account.id).await?;
-    }
-
     let status_text = format!(
-        "🤖 <b>Puppeteer Admin Bot</b>\n\n\
-        📊 <b>Statistics:</b>\n\
+        "🎭 <b>Puppeteer Admin Panel</b>\n\n\
+        📊 <b>Quick Stats:</b>\n\
         • Active Userbots: {}\n\
-        • Total Accounts: {}\n\
-        • Total Messages: {}\n\n\
-        Use /help to see available commands.",
+        • Total Accounts: {}\n\n\
+        Select an option below:",
         active_count,
-        all_accounts.len(),
-        total_messages
+        all_accounts.len()
     );
 
     bot.send_message(msg.chat.id, status_text)
         .parse_mode(teloxide::types::ParseMode::Html)
+        .reply_markup(crate::bot::callbacks::main_menu_keyboard())
         .await?;
 
     Ok(())
