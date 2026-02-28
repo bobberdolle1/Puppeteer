@@ -120,7 +120,7 @@ graph LR
     K --> L[Show Typing]
     L --> M[Generate AI Response]
     M --> N{Multi-text?}
-    N -->|Yes| O[Split by ||]
+    N -->|Yes| O["Split by ||"]
     N -->|No| P[Send Message]
     O --> P
 ```
