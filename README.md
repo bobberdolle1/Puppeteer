@@ -83,9 +83,13 @@ Built in **Rust** 🦀 for maximum performance, reliability, and safety.
 |---------|-------------|--------|
 | 🎭 **Multi-Account Management** | Orchestrate unlimited Telegram userbot accounts | ✅ Ready |
 | 🧠 **AI-Driven Responses** | Powered by Ollama with custom prompts | ✅ Ready |
+| 🖼️ **Photo Analysis** | Automatic image analysis with vision models (llava, minicpm-v) | ✅ Ready |
+| 🎬 **GIF/Animation Support** | Extracts 3 frames for intelligent content understanding | ✅ Ready |
+| 🎤 **Voice Transcription** | Automatic voice-to-text via Whisper API | ✅ Ready |
+| 📹 **Video Circles** | Frame extraction and analysis for video messages | ✅ Ready |
+| 🎨 **Sticker Recognition** | Smart sticker handling with casual responses | ✅ Ready |
+| 🤖 **Dynamic Personas** | Create custom AI personalities on-the-fly | ✅ Ready |
 | 💾 **RAG Memory** | Long-term conversation memory | 🚧 Coming Soon |
-| 🎤 **Voice Transcription** | Automatic voice-to-text via Whisper | 🚧 Coming Soon |
-| 👁️ **Vision Support** | Image analysis with multimodal LLMs | 🚧 Coming Soon |
 | 🔍 **Web Search** | Real-time information retrieval | 📋 Planned |
 
 </details>
@@ -98,33 +102,45 @@ The **secret sauce** that makes bots indistinguishable from humans:
 
 ```mermaid
 graph LR
-    A[Incoming Message] --> B{Check Age}
-    B -->|Too Old| C[Ignore]
-    B -->|Fresh| D{Check Whitelist}
-    D -->|Not Allowed| C
-    D -->|Allowed| E{Probability Check}
-    E -->|Skip| C
-    E -->|Respond| F[Calculate Read Delay]
-    F --> G[Wait 2-15s]
-    G --> H[Show Typing Indicator]
-    H --> I[Generate AI Response]
-    I --> J[Calculate Typing Duration]
-    J --> K[Wait Based on Length]
-    K --> L{Use Reply?}
-    L -->|Yes| M[Send with Reply]
-    L -->|No| N[Send Regular Message]
+    A[Incoming Message] --> B{Media Type?}
+    B -->|Photo| C[Vision Analysis]
+    B -->|GIF| D[Extract 3 Frames]
+    B -->|Voice| E[Whisper Transcription]
+    B -->|Sticker| F[Casual Response]
+    B -->|Text| G[Process Text]
+    C --> H{Rate Limit Check}
+    D --> H
+    E --> H
+    F --> H
+    G --> H
+    H -->|Spam| I[Ignore]
+    H -->|OK| J{Probability Check}
+    J -->|Skip| I
+    J -->|Respond| K[Read Delay 5-60s]
+    K --> L[Show Typing]
+    L --> M[Generate AI Response]
+    M --> N{Multi-text?}
+    N -->|Yes| O[Split by ||]
+    N -->|No| P[Send Message]
+    O --> P
 ```
 
 #### 🎨 Humanization Features
 
-- ⏱️ **Realistic Typing Indicators** - Shows "typing..." status
-- 📖 **Smart Response Delays** - Simulates reading time (2-15s)
+- ⏱️ **Realistic Typing Indicators** - Shows "typing..." status with variance
+- 📖 **Smart Response Delays** - Simulates reading time (5-60s random)
 - 🎲 **Configurable Reply Probability** - Doesn't always respond (0-100%)
 - 💬 **Intelligent Reply Logic** - Uses reply only in active dialogues
 - ⏰ **Message Age Filtering** - Ignores old messages (configurable)
 - 💌 **Private Chat Behavior** - Always responds in DMs
 - ⌨️ **Typing Speed Simulation** - Realistic typing duration (100-400 CPM)
 - 🎯 **Random Variance** - Natural randomness in all timings
+- 🎭 **Distracted Typist** - 20% chance of pausing mid-typing
+- 📝 **Multi-texting** - Splits responses by `||` into separate messages
+- 🤐 **Smart Ignore** - AI can return `<IGNORE>` to skip meaningless messages
+- 🎨 **Casual Sticker Responses** - Random reactions: "ахах", "жиза", "норм", "кек"
+- 🛡️ **Rate Limiting** - Ignores users sending >5 messages/minute
+- 🖼️ **Media Context** - Passes image/video descriptions to AI
 
 </details>
 
@@ -335,6 +351,24 @@ DEFAULT_ALWAYS_RESPOND_PM=1
 |---------|-------------|---------|
 | `/dm` | Send DM from bot | `/dm 2 123456789 Hello!` |
 
+### Persona Management
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/list_personas` | List all personality archetypes | `/list_personas` |
+| `/random_persona` | Assign random persona | `/random_persona 1` |
+| `/set_persona` | Assign specific persona | `/set_persona 1 Tired Techie` |
+
+**Available Personas:**
+- 🤖 **Tired Techie** - Dry, no emojis, minimal responses
+- 😎 **Ironic Zoomer** - Slang, memes, emoji spam
+- 😡 **Toxic Gamer** - Aggressive, caps, confrontational
+- 👴 **Clueless Boomer** - Polite, confused by slang
+- 🕵️ **Paranoid Theorist** - Sees conspiracies everywhere
+- 💖 **Wholesome Helper** - Kind, supportive, positive
+- 📝 **Minimalist** - One-word answers only
+- 🧠 **Sarcastic Intellectual** - Smart, witty, ironic
+
 </details>
 
 <details>
@@ -513,6 +547,79 @@ tracing = "0.1"
 ## 🎨 Advanced Features
 
 <details>
+<summary><b>🖼️ Media Processing</b></summary>
+<br>
+
+Puppeteer can understand and respond to various media types with human-like intelligence:
+
+### Photo Analysis 📸
+
+```
+👤 User: [Sends photo of a cat]
+   [Bot downloads image]
+   [Bot analyzes with llava vision model]
+   [Bot reads - 8s delay]
+   [Bot typing - 4s]
+🤖 Bot: ахах милый котик
+```
+
+### GIF Understanding 🎬
+
+```
+👤 User: [Sends funny GIF]
+   [Bot extracts 3 frames: start, middle, end]
+   [Bot analyzes sequence with vision]
+   [Bot reads - 5s]
+   [Bot typing - 3s]
+🤖 Bot: жиза бро || это я когда понедельник
+```
+
+### Voice Transcription 🎤
+
+```
+👤 User: [Sends voice message: "Hey, can you help me?"]
+   [Bot downloads audio]
+   [Bot transcribes with Whisper]
+   [Bot processes: "[Голосовое сообщение]: Hey, can you help me?"]
+   [Bot reads - 6s]
+   [Bot typing - 5s]
+🤖 Bot: конечно || чем помочь?
+```
+
+### Sticker Reactions 🎨
+
+```
+👤 User: [Sends sticker]
+   [Bot recognizes sticker type]
+   [25% probability to respond]
+   [Bot reads - 2s]
+   [Bot typing - 1s]
+🤖 Bot: кек
+```
+
+### Supported Media Types
+
+| Media Type | Processing | Response Style | Probability |
+|------------|-----------|----------------|-------------|
+| 📸 **Photo** | Vision analysis (llava) | Contextual | 50% of base |
+| 🎬 **GIF/Animation** | 3-frame extraction + vision | Contextual | 50% of base |
+| 🎤 **Voice** | Whisper transcription | Full response | 100% of base |
+| 📹 **Video Circle** | 3-frame extraction + vision | Contextual | 50% of base |
+| 🎨 **Sticker** | Type recognition | Casual ("ахах", "жиза") | 25% of base |
+| 🎭 **Animated Sticker** | Type recognition | Casual | 25% of base |
+
+### Technical Details
+
+- **Vision Models**: llava, minicpm-v (configurable)
+- **Frame Extraction**: FFmpeg-based, 3 frames (0%, 50%, 100%)
+- **Image Encoding**: Base64 for Ollama API
+- **Voice API**: Whisper-compatible endpoint
+- **Async Processing**: Non-blocking downloads and analysis
+- **Error Handling**: Graceful fallbacks to placeholder text
+
+</details>
+
+<details>
 <summary><b>🧠 AI Personality System</b></summary>
 <br>
 
@@ -651,22 +758,29 @@ graph LR
 - [x] Bot groups
 - [x] Spam campaigns
 - [x] Direct messaging
+- [x] Inline keyboard UI
 
 </td>
 <td width="33%">
 
-### 🚧 Phase 2: Advanced
-- [ ] Voice support (Whisper)
-- [ ] Vision support (LLaVA)
-- [ ] RAG memory system
-- [ ] Web search integration
-- [ ] Prompt injection detection
-- [ ] Rate limiting
+### ✅ Phase 2: Media & AI
+- [x] Photo analysis (Vision)
+- [x] GIF/animation support
+- [x] Voice transcription
+- [x] Video circles
+- [x] Sticker recognition
+- [x] Dynamic personas
+- [x] Rate limiting
+- [x] Multi-texting
+- [x] Distracted typist
+- [x] Smart ignore system
 
 </td>
 <td width="33%">
 
 ### 📋 Phase 3: Enterprise
+- [ ] RAG memory system
+- [ ] Web search integration
 - [ ] Web dashboard
 - [ ] Telegram Mini App
 - [ ] Analytics & metrics
