@@ -3,7 +3,6 @@ use crate::{
     state::{AppState, UserbotHandle},
 };
 use anyhow::{Context, Result};
-use rand::Rng;
 use rust_tdlib::{
     client::{tdlib_client::TdJson, Client, ConsoleAuthStateHandler, Worker},
     types::*,
