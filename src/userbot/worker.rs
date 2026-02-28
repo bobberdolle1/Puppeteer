@@ -558,6 +558,79 @@ async fn generate_ai_response(
     chat_id: i64,
     user_message: &str,
 ) -> Result<String> {
+    let http_client = reqwest::Client::new();
+    
+    // Check if web search is needed
+    let search_context = match crate::ai::should_search(
+        &http_client,
+        &state.config.ollama_url,
+        &state.config.ollama_model,
+        user_message,
+    ).await {
+        Ok(Some(query)) => {
+            tracing::info!("Web search triggered for query: {}", query);
+            
+            // Perform search
+            match crate::ai::search_web(&http_client, &query, 3).await {
+                Ok(results) => {
+                    if !results.is_empty() {
+                        Some(crate::ai::format_search_results(&results))
+                    } else {
+                        None
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Web search failed: {}", e);
+                    None
+                }
+            }
+        }
+        Ok(None) => None,
+        Err(e) => {
+            tracing::warn!("Search detection failed: {}", e);
+            None
+        }
+    };
+    
+    // Generate embedding for current message for RAG retrieval
+    let query_embedding = match crate::ai::generate_embedding(
+        &http_client,
+        &state.config.ollama_url,
+        &state.config.ollama_model,
+        user_message,
+    ).await {
+        Ok(emb) => Some(emb),
+        Err(e) => {
+            tracing::warn!("Failed to generate query embedding: {}", e);
+            None
+        }
+    };
+    
+    // Retrieve relevant memories if embedding was successful
+    let memory_context = if let Some(ref embedding) = query_embedding {
+        match crate::ai::retrieve_memories(&state.db_pool, account.id, chat_id, embedding, 3).await {
+            Ok(memories) => {
+                if !memories.is_empty() {
+                    let mut context = String::from("[ВСПЛЫВШИЕ ВОСПОМИНАНИЯ О ПРОШЛЫХ ДИАЛОГАХ]\n\n");
+                    for (i, memory) in memories.iter().enumerate() {
+                        if memory.similarity > 0.5 { // Only include relevant memories
+                            context.push_str(&format!("{}. {}\n", i + 1, memory.content));
+                        }
+                    }
+                    Some(context)
+                } else {
+                    None
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to retrieve memories: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    
     // Get recent message history
     let history = AccountRepository::get_recent_messages(&state.db_pool, account.id, chat_id, 10).await?;
     
@@ -569,6 +642,22 @@ async fn generate_ai_response(
         role: "system".to_string(),
         content: account.system_prompt.clone(),
     });
+    
+    // Add memory context if available
+    if let Some(ref mem_ctx) = memory_context {
+        messages.push(crate::ai::ollama::OllamaMessage {
+            role: "system".to_string(),
+            content: mem_ctx.clone(),
+        });
+    }
+    
+    // Add search results if available
+    if let Some(ref search_ctx) = search_context {
+        messages.push(crate::ai::ollama::OllamaMessage {
+            role: "system".to_string(),
+            content: search_ctx.clone(),
+        });
+    }
     
     // Add history
     for msg in history {
@@ -593,6 +682,29 @@ async fn generate_ai_response(
     };
     
     let response = ollama_client.chat(request).await?;
+    
+    // Store significant messages in long-term memory
+    if let Some(embedding) = query_embedding {
+        // Only store if message is substantial (>10 chars)
+        if user_message.len() > 10 {
+            if let Err(e) = crate::ai::store_memory(
+                &state.db_pool,
+                account.id,
+                chat_id,
+                user_message,
+                &embedding,
+            ).await {
+                tracing::warn!("Failed to store memory: {}", e);
+            }
+            
+            // Cleanup old memories periodically (every 100th message)
+            if rand::random::<u8>() % 100 == 0 {
+                if let Err(e) = crate::ai::cleanup_old_memories(&state.db_pool, account.id, chat_id).await {
+                    tracing::warn!("Failed to cleanup old memories: {}", e);
+                }
+            }
+        }
+    }
     
     Ok(response)
 }

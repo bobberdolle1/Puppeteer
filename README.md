@@ -89,8 +89,8 @@ Built in **Rust** 🦀 for maximum performance, reliability, and safety.
 | 📹 **Video Circles** | Frame extraction and analysis for video messages | ✅ Ready |
 | 🎨 **Sticker Recognition** | Smart sticker handling with casual responses | ✅ Ready |
 | 🤖 **Dynamic Personas** | Create custom AI personalities on-the-fly | ✅ Ready |
-| 💾 **RAG Memory** | Long-term conversation memory | 🚧 Coming Soon |
-| 🔍 **Web Search** | Real-time information retrieval | 📋 Planned |
+| 💾 **RAG Memory** | Long-term conversation memory with semantic search | ✅ Ready |
+| 🔍 **Web Search** | Real-time information retrieval via DuckDuckGo | ✅ Ready |
 
 </details>
 
@@ -940,13 +940,13 @@ graph LR
 - [x] Multi-texting
 - [x] Distracted typist
 - [x] Smart ignore system
+- [x] RAG memory with embeddings
+- [x] Web search integration
 
 </td>
 <td width="33%">
 
 ### 📋 Phase 3: Enterprise
-- [ ] RAG memory system
-- [ ] Web search integration
 - [ ] Web dashboard
 - [ ] Telegram Mini App
 - [ ] Analytics & metrics
