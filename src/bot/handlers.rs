@@ -28,6 +28,14 @@ pub enum Command {
     #[command(description = "Delete an account from database (usage: /delete <id>)")]
     Delete,
     
+    // Persona commands
+    #[command(description = "List all available personality archetypes")]
+    ListPersonas,
+    #[command(description = "Set random persona for account (usage: /random_persona <id>)")]
+    RandomPersona,
+    #[command(description = "Set specific persona (usage: /set_persona <id> <persona_name>)")]
+    SetPersona,
+    
     // Bot group commands
     #[command(description = "Create bot group (usage: /create_group <name> [desc])")]
     CreateGroup,
@@ -73,6 +81,11 @@ pub async fn handle_command(
         Command::RemoveChat => handle_remove_chat(bot, msg, state).await?,
         Command::Stop => handle_stop(bot, msg, state).await?,
         Command::Delete => handle_delete(bot, msg, state).await?,
+        
+        // Persona commands
+        Command::ListPersonas => handle_list_personas(bot, msg).await?,
+        Command::RandomPersona => handle_random_persona(bot, msg, state, args).await?,
+        Command::SetPersona => handle_set_persona(bot, msg, state, args).await?,
         
         // Bot group commands
         Command::CreateGroup => crate::bot::group_commands::handle_create_group(bot, msg, state, args).await?,
@@ -491,6 +504,160 @@ async fn handle_help(
     bot.send_message(msg.chat.id, help_text)
         .parse_mode(teloxide::types::ParseMode::Html)
         .await?;
+
+    Ok(())
+}
+
+// ============================================================================
+// Persona Management Handlers
+// ============================================================================
+
+async fn handle_list_personas(
+    bot: Bot,
+    msg: Message,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let archetypes = crate::ai::list_archetypes();
+    
+    let mut response = String::from("🎭 <b>Available Personality Archetypes:</b>\n\n");
+    
+    for (idx, name) in archetypes.iter().enumerate() {
+        response.push_str(&format!("{}. <code>{}</code>\n", idx + 1, name));
+    }
+    
+    response.push_str("\n<b>Usage:</b>\n");
+    response.push_str("• <code>/random_persona &lt;account_id&gt;</code> - Assign random persona\n");
+    response.push_str("• <code>/set_persona &lt;account_id&gt; &lt;persona_name&gt;</code> - Assign specific persona\n\n");
+    response.push_str("<i>Each persona has unique communication style, emoji usage, and behavioral patterns.</i>");
+    
+    bot.send_message(msg.chat.id, response)
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .await?;
+    
+    Ok(())
+}
+
+async fn handle_random_persona(
+    bot: Bot,
+    msg: Message,
+    state: AppState,
+    args: Vec<String>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if args.is_empty() {
+        bot.send_message(
+            msg.chat.id,
+            "❌ Usage: /random_persona <account_id>\n\nExample: /random_persona 1",
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let account_id: i64 = match args[0].parse() {
+        Ok(id) => id,
+        Err(_) => {
+            bot.send_message(msg.chat.id, "❌ Invalid account ID. Must be a number.")
+                .await?;
+            return Ok(());
+        }
+    };
+
+    // Check if account exists
+    let account = match AccountRepository::get_by_id(&state.db_pool, account_id).await? {
+        Some(acc) => acc,
+        None => {
+            bot.send_message(msg.chat.id, format!("❌ Account {} not found.", account_id))
+                .await?;
+            return Ok(());
+        }
+    };
+
+    // Generate random persona
+    let new_prompt = crate::ai::generate_random_persona();
+
+    // Update in database
+    AccountRepository::update_system_prompt(&state.db_pool, account_id, &new_prompt).await?;
+
+    bot.send_message(
+        msg.chat.id,
+        format!(
+            "✅ Random persona assigned to account {} ({})\n\n\
+            <i>Restart the userbot with /stop {} and then start it again for changes to take effect.</i>",
+            account_id, account.phone_number, account_id
+        ),
+    )
+    .parse_mode(teloxide::types::ParseMode::Html)
+    .await?;
+
+    Ok(())
+}
+
+async fn handle_set_persona(
+    bot: Bot,
+    msg: Message,
+    state: AppState,
+    args: Vec<String>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if args.len() < 2 {
+        bot.send_message(
+            msg.chat.id,
+            "❌ Usage: /set_persona <account_id> <persona_name>\n\n\
+            Example: /set_persona 1 Tired Techie\n\n\
+            Use /list_personas to see available personas.",
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let account_id: i64 = match args[0].parse() {
+        Ok(id) => id,
+        Err(_) => {
+            bot.send_message(msg.chat.id, "❌ Invalid account ID. Must be a number.")
+                .await?;
+            return Ok(());
+        }
+    };
+
+    // Join remaining args as persona name
+    let persona_name = args[1..].join(" ");
+
+    // Check if account exists
+    let account = match AccountRepository::get_by_id(&state.db_pool, account_id).await? {
+        Some(acc) => acc,
+        None => {
+            bot.send_message(msg.chat.id, format!("❌ Account {} not found.", account_id))
+                .await?;
+            return Ok(());
+        }
+    };
+
+    // Generate persona by name
+    let new_prompt = match crate::ai::generate_persona_by_name(&persona_name) {
+        Some(prompt) => prompt,
+        None => {
+            bot.send_message(
+                msg.chat.id,
+                format!(
+                    "❌ Persona '{}' not found.\n\nUse /list_personas to see available personas.",
+                    persona_name
+                ),
+            )
+            .await?;
+            return Ok(());
+        }
+    };
+
+    // Update in database
+    AccountRepository::update_system_prompt(&state.db_pool, account_id, &new_prompt).await?;
+
+    bot.send_message(
+        msg.chat.id,
+        format!(
+            "✅ Persona <b>{}</b> assigned to account {} ({})\n\n\
+            <i>Restart the userbot with /stop {} and then start it again for changes to take effect.</i>",
+            persona_name, account_id, account.phone_number, account_id
+        ),
+    )
+    .parse_mode(teloxide::types::ParseMode::Html)
+    .await?;
 
     Ok(())
 }

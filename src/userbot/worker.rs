@@ -25,6 +25,8 @@ lazy_static::lazy_static! {
 const STICKER_RESPONSES: &[&str] = &["ахах", "жиза", "норм", "кек", "лол", "хд"];
 
 /// Default advanced adaptive system prompt for human-like behavior with extreme dryness
+/// NOTE: This is a fallback. For diverse "horde" behavior, use personas::generate_random_persona()
+/// or personas::generate_persona_by_name() when creating new accounts.
 pub const DEFAULT_SYSTEM_PROMPT: &str = r#"[КТО ТЫ]
 Ты обычный, немного уставший пользователь Telegram. Ты общаешься максимально сухо, без эмоций и без попыток быть вежливым.
 
@@ -50,12 +52,6 @@ Assistant: <IGNORE>
 
 User: ну и че мы делать будем с этой базой данных?
 Assistant: хз вообще || надо думать || я бы снес ее нахрен и заново поднял"#;
-
-// Rate limiting: track message timestamps per user
-lazy_static::lazy_static! {
-    static ref USER_MESSAGE_TIMESTAMPS: Arc<RwLock<HashMap<i64, Vec<i64>>>> = 
-        Arc::new(RwLock::new(HashMap::new()));
-}
 
 pub async fn spawn_userbot(state: AppState, account_id: i64) -> Result<()> {
     if state.is_userbot_running(account_id).await {
@@ -221,16 +217,87 @@ async fn handle_incoming_message(
     let message_id = message.id();
     let message_date = message.date();
 
-    // Get message text or media context
-    let text = match message.content() {
-        MessageContent::MessageText(msg_text) => msg_text.text().text().to_string(),
-        MessageContent::MessageSticker(_) => "[Пользователь отправил стикер]".to_string(),
-        MessageContent::MessageAnimation(_) => "[Пользователь отправил GIF]".to_string(),
-        MessageContent::MessagePhoto(_) => "[Пользователь отправил фото]".to_string(),
-        MessageContent::MessageVideo(_) => "[Пользователь отправил видео]".to_string(),
-        MessageContent::MessageVoiceNote(_) => "[Пользователь отправил голосовое сообщение]".to_string(),
-        MessageContent::MessageVideoNote(_) => "[Пользователь отправил видеосообщение]".to_string(),
-        _ => return Ok(()), // Ignore other message types
+    // Get sender user ID for rate limiting
+    let sender_id = match message.sender_id() {
+        MessageSender::User(user) => user.user_id(),
+        _ => 0,
+    };
+
+    // Rate limiting: check if user is spamming (>5 messages per minute)
+    if sender_id != 0 {
+        let now = chrono::Utc::now().timestamp();
+        let mut timestamps_lock = USER_MESSAGE_TIMESTAMPS.write().await;
+        let user_timestamps = timestamps_lock.entry(sender_id).or_insert_with(Vec::new);
+        
+        // Remove timestamps older than 60 seconds
+        user_timestamps.retain(|&ts| now - ts < 60);
+        
+        // Check if user exceeded rate limit
+        if user_timestamps.len() >= 5 {
+            tracing::debug!("Rate limit exceeded for user {} in chat {}", sender_id, chat_id);
+            return Ok(());
+        }
+        
+        // Add current timestamp
+        user_timestamps.push(now);
+    }
+
+    // Process message content and get text + optional media description
+    let (text, is_sticker) = match message.content() {
+        MessageContent::MessageText(msg_text) => {
+            (msg_text.text().text().to_string(), false)
+        }
+        MessageContent::MessagePhoto(photo) => {
+            // Process photo with vision
+            match process_photo(state, client, photo).await {
+                Ok(description) => (format!("[Изображение]: {}", description), false),
+                Err(e) => {
+                    tracing::warn!("Failed to process photo: {}", e);
+                    ("[Пользователь отправил фото]".to_string(), false)
+                }
+            }
+        }
+        MessageContent::MessageAnimation(animation) => {
+            // Process GIF/animation with vision (extract 3 frames)
+            match process_animation(state, client, animation).await {
+                Ok(description) => (format!("[GIF/Анимация]: {}", description), false),
+                Err(e) => {
+                    tracing::warn!("Failed to process animation: {}", e);
+                    ("[Пользователь отправил GIF]".to_string(), false)
+                }
+            }
+        }
+        MessageContent::MessageSticker(_sticker) => {
+            // Stickers get casual responses with low probability
+            ("[Пользователь отправил стикер]".to_string(), true)
+        }
+        MessageContent::MessageVoiceNote(voice) => {
+            // Process voice with Whisper
+            match process_voice(state, client, voice).await {
+                Ok(transcription) => (format!("[Голосовое сообщение]: {}", transcription), false),
+                Err(e) => {
+                    tracing::warn!("Failed to process voice: {}", e);
+                    ("[Пользователь отправил голосовое сообщение]".to_string(), false)
+                }
+            }
+        }
+        MessageContent::MessageVideoNote(video_note) => {
+            // Process video circle (extract 3 frames)
+            match process_video_note(state, client, video_note).await {
+                Ok(description) => (format!("[Видео кружок]: {}", description), false),
+                Err(e) => {
+                    tracing::warn!("Failed to process video note: {}", e);
+                    ("[Пользователь отправил видеосообщение]".to_string(), false)
+                }
+            }
+        }
+        MessageContent::MessageVideo(_) => {
+            ("[Пользователь отправил видео]".to_string(), false)
+        }
+        _ => {
+            // Ignore other message types
+            return Ok(());
+        }
     };
 
     // Check if message is too old
@@ -249,12 +316,18 @@ async fn handle_incoming_message(
     // Determine if this is a private chat
     let is_private = chat_id > 0;
 
+    // Calculate reply probability (lower for stickers)
+    let adjusted_probability = if is_sticker {
+        account.reply_probability / 4 // Very low probability for stickers
+    } else {
+        account.reply_probability
+    };
+
     // Decide whether to respond
     let should_respond = if is_private && account.always_respond_in_pm == 1 {
         true
     } else {
-        let mut rng = rand::thread_rng();
-        rng.gen_range(0..100) < account.reply_probability
+        rand::random::<u8>() as i64 % 100 < adjusted_probability
     };
 
     if !should_respond {
@@ -276,8 +349,7 @@ async fn handle_incoming_message(
     drop(client_lock);
 
     // Random "Read Delay" - simulate user reading and thinking (5-60 seconds)
-    let mut rng = rand::thread_rng();
-    let read_delay = rng.gen_range(5..=60);
+    let read_delay = 5 + (rand::random::<u8>() % 56) as u64; // 5-60 seconds
     tracing::debug!("Read delay: {}s for chat {}", read_delay, chat_id);
     tokio::time::sleep(tokio::time::Duration::from_secs(read_delay)).await;
 
@@ -286,13 +358,19 @@ async fn handle_incoming_message(
     tokio::time::sleep(tokio::time::Duration::from_secs(response_delay as u64)).await;
 
     // Generate AI response
-    let response_text = match generate_ai_response(state, account, chat_id, &text).await {
-        Ok(resp) => resp,
-        Err(e) => {
-            tracing::error!("Failed to generate AI response: {}", e);
-            // Notify owner, but don't send error to chat
-            notify_owner(state, &format!("⚠️ Userbot {} failed to generate response: {}", account.id, e)).await?;
-            return Ok(());
+    let response_text = if is_sticker {
+        // Casual response for stickers
+        let idx = rand::random::<usize>() % STICKER_RESPONSES.len();
+        STICKER_RESPONSES[idx].to_string()
+    } else {
+        match generate_ai_response(state, account, chat_id, &text).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                tracing::error!("Failed to generate AI response: {}", e);
+                // Notify owner, but don't send error to chat
+                notify_owner(state, &format!("⚠️ Userbot {} failed to generate response: {}", account.id, e)).await?;
+                return Ok(());
+            }
         }
     };
 
@@ -329,14 +407,12 @@ async fn handle_incoming_message(
             true
         } else {
             // Otherwise, use reply based on probability (but make it lower for natural feel)
-            let mut rng = rand::thread_rng();
-            rng.gen_range(0..100) < (account.use_reply_probability / 2) // Half the probability for non-dialogue messages
+            rand::random::<u8>() as i64 % 100 < (account.use_reply_probability / 2) // Half the probability for non-dialogue messages
         }
     };
 
     // 20% chance of "distracted typist" behavior
-    let mut rng = rand::thread_rng();
-    let is_distracted = rng.gen_range(0..100) < 20;
+    let is_distracted = (rand::random::<u8>() % 100) < 20;
 
     if is_distracted {
         tracing::debug!("Distracted typist behavior triggered for userbot {}", account.id);
@@ -354,7 +430,7 @@ async fn handle_incoming_message(
         drop(client_lock);
 
         // Type for a bit (2-4 seconds)
-        let distracted_typing_duration = rng.gen_range(2..=4);
+        let distracted_typing_duration = 2 + (rand::random::<u8>() % 3) as u64; // 2-4 seconds
         tokio::time::sleep(tokio::time::Duration::from_secs(distracted_typing_duration)).await;
 
         // Cancel typing (send cancel action)
@@ -370,7 +446,7 @@ async fn handle_incoming_message(
         drop(client_lock);
 
         // Pause (distracted - 3-10 seconds)
-        let distracted_pause = rng.gen_range(3..=10);
+        let distracted_pause = 3 + (rand::random::<u8>() % 8) as u64; // 3-10 seconds
         tokio::time::sleep(tokio::time::Duration::from_secs(distracted_pause)).await;
     }
 
@@ -426,8 +502,7 @@ async fn handle_incoming_message(
 
         // Add a small random pause between chunks (0.5s - 1.5s)
         if idx < message_chunks.len() - 1 {
-            let mut rng = rand::thread_rng();
-            let pause_ms = rng.gen_range(500..=1500);
+            let pause_ms = 500 + (rand::random::<u16>() % 1001) as u64; // 500-1500ms
             tokio::time::sleep(tokio::time::Duration::from_millis(pause_ms)).await;
         }
     }
@@ -437,7 +512,7 @@ async fn handle_incoming_message(
         account_id: account.id,
         chat_id,
         role: MessageRole::Assistant,
-        content: response_text,
+        content: response_text.clone(),
     };
 
     if let Err(e) = AccountRepository::add_message(&state.db_pool, new_message).await {
@@ -450,8 +525,10 @@ async fn handle_incoming_message(
 
 /// Calculate response delay based on message length and account settings
 fn calculate_response_delay(account: &crate::db::models::Account, text: &str) -> i64 {
-    let mut rng = rand::thread_rng();
-    let base_delay = rng.gen_range(account.min_response_delay_sec..=account.max_response_delay_sec);
+    let min = account.min_response_delay_sec;
+    let max = account.max_response_delay_sec;
+    let range = max - min;
+    let base_delay = min + (rand::random::<u8>() as i64 % (range + 1));
     
     // Add extra delay for longer messages (simulating reading time)
     let reading_delay = (text.len() / 100) as i64; // ~1 sec per 100 chars
@@ -467,9 +544,9 @@ fn calculate_typing_duration(account: &crate::db::models::Account, response: &st
     let seconds = (minutes * 60.0) as i64;
     
     // Add some randomness (±20%)
-    let mut rng = rand::thread_rng();
     let variance = (seconds as f64 * 0.2) as i64;
-    let final_duration = seconds + rng.gen_range(-variance..=variance);
+    let random_offset = (rand::random::<u8>() as i64 % (variance * 2 + 1)) - variance;
+    let final_duration = seconds + random_offset;
     
     // Clamp between 1 and 30 seconds
     final_duration.max(1).min(30)
@@ -588,10 +665,11 @@ async fn process_animation(
     let frames = extract_video_frames(&file_path, 3).await?;
     
     // Encode frames to base64
+    use base64::Engine;
     let mut base64_frames = Vec::new();
     for frame_path in &frames {
         let frame_bytes = tokio::fs::read(frame_path).await?;
-        base64_frames.push(base64::encode(&frame_bytes));
+        base64_frames.push(base64::engine::general_purpose::STANDARD.encode(&frame_bytes));
     }
     
     // Analyze with vision model
@@ -652,10 +730,11 @@ async fn process_video_note(
     let frames = extract_video_frames(&file_path, 3).await?;
     
     // Encode frames to base64
+    use base64::Engine;
     let mut base64_frames = Vec::new();
     for frame_path in &frames {
         let frame_bytes = tokio::fs::read(frame_path).await?;
-        base64_frames.push(base64::encode(&frame_bytes));
+        base64_frames.push(base64::engine::general_purpose::STANDARD.encode(&frame_bytes));
     }
     
     // Analyze with vision model
