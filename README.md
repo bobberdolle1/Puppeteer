@@ -312,8 +312,84 @@ DEFAULT_ALWAYS_RESPOND_PM=1
 </details>
 
 <details>
-<summary><b>🤖 Admin Commands</b></summary>
+<summary><b>🎯 Inline Keyboard UI</b></summary>
 <br>
+
+### Modern Admin Interface
+
+Puppeteer использует **современный inline keyboard интерфейс** вместо старых текстовых команд!
+
+#### 🏠 Main Menu
+
+Отправь `/start` и получишь красивое меню с кнопками:
+
+```
+🎭 Puppeteer Bot
+
+Status: ✅ Online
+Accounts: 3 active
+Uptime: 2h 15m
+
+[ 👥 Manage Accounts ]
+[ ⚙️ Global Settings  ]
+[ 📊 Statistics       ]
+```
+
+#### 👥 Account Management
+
+Нажми **"Manage Accounts"** → увидишь список всех ботов:
+
+```
+📱 Your Accounts
+
+🟢 Bot #1 (+79991234567)
+🟢 Bot #2 (+79997654321)
+🔴 Bot #3 (+79995555555) [Stopped]
+
+[ ➕ Add New Account ]
+[ 🔙 Back to Menu    ]
+```
+
+#### 🎛️ Account Control Panel
+
+Выбери бота → откроется панель управления:
+
+```
+🤖 Bot #1 (+79991234567)
+Status: 🟢 Active
+Probability: 80%
+Chats: 5 whitelisted
+
+[ 🟢 Stop Bot        ]
+[ 📝 Edit Prompt     ]
+[ 🎲 Set Probability ]
+[ 💬 Manage Chats    ]
+[ 🎭 Change Persona  ]
+[ 🗑 Delete Account  ]
+[ 🔙 Back           ]
+```
+
+#### ⚡ Quick Actions
+
+Все действия в **один клик**:
+- ✅ Start/Stop бота
+- ✅ Изменить промпт
+- ✅ Настроить вероятность ответа
+- ✅ Управлять whitelist чатов
+- ✅ Сменить персону
+- ✅ Удалить аккаунт
+
+**Никаких команд вручную!** Все через кнопки 🎯
+
+</details>
+
+<details>
+<summary><b>🤖 Admin Commands (Legacy)</b></summary>
+<br>
+
+> **💡 Tip**: Используй inline keyboard UI (кнопки) вместо команд! Просто отправь `/start`
+
+Команды все еще работают для продвинутых пользователей и автоматизации:
 
 ### Account Management
 
