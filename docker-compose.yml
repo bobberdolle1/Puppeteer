@@ -34,22 +34,6 @@ services:
     networks:
       - puppeteer_network
 
-  # Optional: Run Ollama in Docker (uncomment if not running on host)
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: puppeteer_ollama
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   ports:
-  #     - "11434:11434"
-  #   restart: unless-stopped
-  #   networks:
-  #     - puppeteer_network
-
-volumes:
-  # Uncomment if using Ollama container
-  # ollama_data:
-
 networks:
   puppeteer_network:
     driver: bridge
