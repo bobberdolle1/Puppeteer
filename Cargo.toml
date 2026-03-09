@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1.42", features = ["full"] }
+tokio = { version = "1.50", features = ["full"] }
 
 # Admin Bot (Bot API)
 teloxide = { version = "0.13", features = ["macros", "sqlite-storage-nativetls"] }
