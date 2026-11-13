@@ -77,3 +77,6 @@ coverage/
 
 # Documentation build
 /book/
+
+# Accidental Rust build cache directory with a space in its name
+/target 2/
